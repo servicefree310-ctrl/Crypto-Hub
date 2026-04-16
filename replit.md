@@ -25,3 +25,20 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## Artifacts
+
+### crypto-exchange (React + Vite)
+- **Path**: `artifacts/crypto-exchange/`
+- **Preview path**: `/` (root)
+- **Description**: A Binance-inspired cryptocurrency exchange frontend UI
+- **Tech**: React, Vite, Tailwind CSS, Recharts, Framer Motion, Wouter, Radix UI
+- **Theme**: Dark theme with #fcd535 yellow accent (Binance-style)
+- **Pages**:
+  - `/` — Home page with price ticker, hero, stats, trending coin table
+  - `/trade` — Full trading interface with order book, chart, buy/sell panel, open orders
+  - `/wallet` — Portfolio dashboard with allocation chart, asset list, transaction history
+  - `/login` — Login with email/password, social login
+  - `/register` — Registration with password strength indicator
+- **Mock data**: `src/lib/mock-data.ts` (coins, candles, order book)
+- **Layout**: Sticky navbar, footer (hidden on trading page)
