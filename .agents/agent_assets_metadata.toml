@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "h_dMVgXD078kf3jRGAOXv"
+uri = "file://artifacts/cryptox-mobile/assets/images/icon.png"
+type = "image"
+title = "cryptox app icon"
