@@ -8,7 +8,7 @@ export default function Navbar() {
   const navLinks = [
     { label: "Markets", path: "/" },
     { label: "Trade", path: "/trade" },
-    { label: "Futures", path: "/trade" },
+    { label: "Futures", path: "/futures" },
     { label: "Wallet", path: "/wallet" },
   ];
 

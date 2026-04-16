@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 
 import Home from "@/pages/Home";
 import Trade from "@/pages/Trade";
+import Futures from "@/pages/Futures";
 import Wallet from "@/pages/Wallet";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -17,7 +18,7 @@ const queryClient = new QueryClient();
 
 function Router() {
   const [location] = useLocation();
-  const isTrading = location === "/trade";
+  const hideFooter = location === "/trade" || location === "/futures";
 
   return (
     <div className="flex flex-col min-h-[100dvh]">
@@ -26,13 +27,14 @@ function Router() {
         <Switch>
           <Route path="/" component={Home} />
           <Route path="/trade" component={Trade} />
+          <Route path="/futures" component={Futures} />
           <Route path="/wallet" component={Wallet} />
           <Route path="/login" component={Login} />
           <Route path="/register" component={Register} />
           <Route component={NotFound} />
         </Switch>
       </main>
-      {!isTrading && <Footer />}
+      {!hideFooter && <Footer />}
     </div>
   );
 }
