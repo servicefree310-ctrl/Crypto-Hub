@@ -1,6 +1,5 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
   description: API specification
@@ -10,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: admin
+    description: Exchange administration operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,205 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      tags: [admin]
+      summary: Admin overview
+      responses:
+        "200":
+          description: Overview metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOverview"
+  /admin/activity:
+    get:
+      operationId: listAdminActivity
+      tags: [admin]
+      summary: Recent admin activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminActivity"
+  /admin/coins:
+    get:
+      operationId: listAdminCoins
+      tags: [admin]
+      summary: List admin coins
+      responses:
+        "200":
+          description: Coin list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminCoin"
+    post:
+      operationId: createAdminCoin
+      tags: [admin]
+      summary: Create admin coin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminCoin"
+      responses:
+        "201":
+          description: Created coin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCoin"
+  /admin/coins/{id}:
+    delete:
+      operationId: deleteAdminCoin
+      tags: [admin]
+      summary: Delete admin coin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted coin
+  /admin/pairs:
+    get:
+      operationId: listAdminPairs
+      tags: [admin]
+      summary: List trading pairs
+      responses:
+        "200":
+          description: Pair list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminPair"
+    post:
+      operationId: createAdminPair
+      tags: [admin]
+      summary: Create trading pair
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminPair"
+      responses:
+        "201":
+          description: Created pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPair"
+  /admin/pairs/{id}:
+    delete:
+      operationId: deleteAdminPair
+      tags: [admin]
+      summary: Delete trading pair
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted pair
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List users
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+    post:
+      operationId: createAdminUser
+      tags: [admin]
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminUser"
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+  /admin/users/{id}:
+    delete:
+      operationId: deleteAdminUser
+      tags: [admin]
+      summary: Delete user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted user
+  /admin/fee-tiers:
+    get:
+      operationId: listAdminFeeTiers
+      tags: [admin]
+      summary: List fee tiers
+      responses:
+        "200":
+          description: Fee tiers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminFeeTier"
+  /admin/fee-tiers/{id}:
+    patch:
+      operationId: updateAdminFeeTier
+      tags: [admin]
+      summary: Update fee tier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdminFeeTier"
+      responses:
+        "200":
+          description: Updated fee tier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminFeeTier"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +233,162 @@ components:
           type: string
       required:
         - status
-
+    AdminCoin:
+      type: object
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        name:
+          type: string
+        network:
+          type: string
+        price:
+          type: number
+        status:
+          type: string
+          enum: [Listed, Paused, Review]
+        depositEnabled:
+          type: boolean
+        withdrawalEnabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, symbol, name, network, price, status, depositEnabled, withdrawalEnabled, createdAt]
+    CreateAdminCoin:
+      type: object
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        network:
+          type: string
+        price:
+          type: number
+      required: [symbol, name, network, price]
+    AdminPair:
+      type: object
+      properties:
+        id:
+          type: integer
+        base:
+          type: string
+        quote:
+          type: string
+        minOrder:
+          type: number
+        maxLeverage:
+          type: integer
+        status:
+          type: string
+          enum: [Active, Paused]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, base, quote, minOrder, maxLeverage, status, createdAt]
+    CreateAdminPair:
+      type: object
+      properties:
+        base:
+          type: string
+        quote:
+          type: string
+        minOrder:
+          type: number
+        maxLeverage:
+          type: integer
+      required: [base, quote, minOrder, maxLeverage]
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [User, Trader, Admin]
+        kyc:
+          type: string
+          enum: [Verified, Pending, Rejected]
+        status:
+          type: string
+          enum: [Active, Suspended]
+        balance:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, role, kyc, status, balance, createdAt]
+    CreateAdminUser:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [User, Trader, Admin]
+      required: [name, email, role]
+    AdminFeeTier:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        makerFee:
+          type: number
+        takerFee:
+          type: number
+        withdrawalFee:
+          type: number
+        minVolume:
+          type: number
+      required: [id, name, makerFee, takerFee, withdrawalFee, minVolume]
+    UpdateAdminFeeTier:
+      type: object
+      properties:
+        makerFee:
+          type: number
+        takerFee:
+          type: number
+        withdrawalFee:
+          type: number
+        minVolume:
+          type: number
+    AdminOverview:
+      type: object
+      properties:
+        listedCoins:
+          type: integer
+        totalCoins:
+          type: integer
+        activePairs:
+          type: integer
+        totalPairs:
+          type: integer
+        users:
+          type: integer
+        pendingKyc:
+          type: integer
+        topMakerFee:
+          type: number
+      required: [listedCoins, totalCoins, activePairs, totalPairs, users, pendingKyc, topMakerFee]
+    AdminActivity:
+      type: object
+      properties:
+        id:
+          type: integer
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, message, createdAt]

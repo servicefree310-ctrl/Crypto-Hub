@@ -14,3 +14,161 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary Admin overview
+ */
+export const GetAdminOverviewResponse = zod.object({
+  listedCoins: zod.number(),
+  totalCoins: zod.number(),
+  activePairs: zod.number(),
+  totalPairs: zod.number(),
+  users: zod.number(),
+  pendingKyc: zod.number(),
+  topMakerFee: zod.number(),
+});
+
+/**
+ * @summary Recent admin activity
+ */
+export const ListAdminActivityResponseItem = zod.object({
+  id: zod.number(),
+  message: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListAdminActivityResponse = zod.array(
+  ListAdminActivityResponseItem,
+);
+
+/**
+ * @summary List admin coins
+ */
+export const ListAdminCoinsResponseItem = zod.object({
+  id: zod.number(),
+  symbol: zod.string(),
+  name: zod.string(),
+  network: zod.string(),
+  price: zod.number(),
+  status: zod.enum(["Listed", "Paused", "Review"]),
+  depositEnabled: zod.boolean(),
+  withdrawalEnabled: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const ListAdminCoinsResponse = zod.array(ListAdminCoinsResponseItem);
+
+/**
+ * @summary Create admin coin
+ */
+export const CreateAdminCoinBody = zod.object({
+  symbol: zod.string(),
+  name: zod.string(),
+  network: zod.string(),
+  price: zod.number(),
+});
+
+/**
+ * @summary Delete admin coin
+ */
+export const DeleteAdminCoinParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List trading pairs
+ */
+export const ListAdminPairsResponseItem = zod.object({
+  id: zod.number(),
+  base: zod.string(),
+  quote: zod.string(),
+  minOrder: zod.number(),
+  maxLeverage: zod.number(),
+  status: zod.enum(["Active", "Paused"]),
+  createdAt: zod.coerce.date(),
+});
+export const ListAdminPairsResponse = zod.array(ListAdminPairsResponseItem);
+
+/**
+ * @summary Create trading pair
+ */
+export const CreateAdminPairBody = zod.object({
+  base: zod.string(),
+  quote: zod.string(),
+  minOrder: zod.number(),
+  maxLeverage: zod.number(),
+});
+
+/**
+ * @summary Delete trading pair
+ */
+export const DeleteAdminPairParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List users
+ */
+export const ListAdminUsersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum(["User", "Trader", "Admin"]),
+  kyc: zod.enum(["Verified", "Pending", "Rejected"]),
+  status: zod.enum(["Active", "Suspended"]),
+  balance: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem);
+
+/**
+ * @summary Create user
+ */
+export const CreateAdminUserBody = zod.object({
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum(["User", "Trader", "Admin"]),
+});
+
+/**
+ * @summary Delete user
+ */
+export const DeleteAdminUserParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List fee tiers
+ */
+export const ListAdminFeeTiersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  makerFee: zod.number(),
+  takerFee: zod.number(),
+  withdrawalFee: zod.number(),
+  minVolume: zod.number(),
+});
+export const ListAdminFeeTiersResponse = zod.array(
+  ListAdminFeeTiersResponseItem,
+);
+
+/**
+ * @summary Update fee tier
+ */
+export const UpdateAdminFeeTierParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateAdminFeeTierBody = zod.object({
+  makerFee: zod.number().optional(),
+  takerFee: zod.number().optional(),
+  withdrawalFee: zod.number().optional(),
+  minVolume: zod.number().optional(),
+});
+
+export const UpdateAdminFeeTierResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  makerFee: zod.number(),
+  takerFee: zod.number(),
+  withdrawalFee: zod.number(),
+  minVolume: zod.number(),
+});

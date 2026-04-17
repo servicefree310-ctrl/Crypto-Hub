@@ -8,3 +8,138 @@
 export interface HealthStatus {
   status: string;
 }
+
+export type AdminCoinStatus =
+  (typeof AdminCoinStatus)[keyof typeof AdminCoinStatus];
+
+export const AdminCoinStatus = {
+  Listed: "Listed",
+  Paused: "Paused",
+  Review: "Review",
+} as const;
+
+export interface AdminCoin {
+  id: number;
+  symbol: string;
+  name: string;
+  network: string;
+  price: number;
+  status: AdminCoinStatus;
+  depositEnabled: boolean;
+  withdrawalEnabled: boolean;
+  createdAt: string;
+}
+
+export interface CreateAdminCoin {
+  symbol: string;
+  name: string;
+  network: string;
+  price: number;
+}
+
+export type AdminPairStatus =
+  (typeof AdminPairStatus)[keyof typeof AdminPairStatus];
+
+export const AdminPairStatus = {
+  Active: "Active",
+  Paused: "Paused",
+} as const;
+
+export interface AdminPair {
+  id: number;
+  base: string;
+  quote: string;
+  minOrder: number;
+  maxLeverage: number;
+  status: AdminPairStatus;
+  createdAt: string;
+}
+
+export interface CreateAdminPair {
+  base: string;
+  quote: string;
+  minOrder: number;
+  maxLeverage: number;
+}
+
+export type AdminUserRole = (typeof AdminUserRole)[keyof typeof AdminUserRole];
+
+export const AdminUserRole = {
+  User: "User",
+  Trader: "Trader",
+  Admin: "Admin",
+} as const;
+
+export type AdminUserKyc = (typeof AdminUserKyc)[keyof typeof AdminUserKyc];
+
+export const AdminUserKyc = {
+  Verified: "Verified",
+  Pending: "Pending",
+  Rejected: "Rejected",
+} as const;
+
+export type AdminUserStatus =
+  (typeof AdminUserStatus)[keyof typeof AdminUserStatus];
+
+export const AdminUserStatus = {
+  Active: "Active",
+  Suspended: "Suspended",
+} as const;
+
+export interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  role: AdminUserRole;
+  kyc: AdminUserKyc;
+  status: AdminUserStatus;
+  balance: number;
+  createdAt: string;
+}
+
+export type CreateAdminUserRole =
+  (typeof CreateAdminUserRole)[keyof typeof CreateAdminUserRole];
+
+export const CreateAdminUserRole = {
+  User: "User",
+  Trader: "Trader",
+  Admin: "Admin",
+} as const;
+
+export interface CreateAdminUser {
+  name: string;
+  email: string;
+  role: CreateAdminUserRole;
+}
+
+export interface AdminFeeTier {
+  id: number;
+  name: string;
+  makerFee: number;
+  takerFee: number;
+  withdrawalFee: number;
+  minVolume: number;
+}
+
+export interface UpdateAdminFeeTier {
+  makerFee?: number;
+  takerFee?: number;
+  withdrawalFee?: number;
+  minVolume?: number;
+}
+
+export interface AdminOverview {
+  listedCoins: number;
+  totalCoins: number;
+  activePairs: number;
+  totalPairs: number;
+  users: number;
+  pendingKyc: number;
+  topMakerFee: number;
+}
+
+export interface AdminActivity {
+  id: number;
+  message: string;
+  createdAt: string;
+}

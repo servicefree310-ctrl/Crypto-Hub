@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   BadgeDollarSign,
   Coins,
+  Loader2,
   Plus,
   Search,
   Settings,
@@ -9,26 +11,51 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import {
+  getGetAdminOverviewQueryKey,
+  getListAdminActivityQueryKey,
+  getListAdminCoinsQueryKey,
+  getListAdminFeeTiersQueryKey,
+  getListAdminPairsQueryKey,
+  getListAdminUsersQueryKey,
+  useCreateAdminCoin,
+  useCreateAdminPair,
+  useCreateAdminUser,
+  useDeleteAdminCoin,
+  useDeleteAdminPair,
+  useDeleteAdminUser,
+  useGetAdminOverview,
+  useListAdminActivity,
+  useListAdminCoins,
+  useListAdminFeeTiers,
+  useListAdminPairs,
+  useListAdminUsers,
+  useUpdateAdminFeeTier,
+  type AdminCoin,
+  type AdminFeeTier,
+  type AdminPair,
+  type AdminUser,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  AdminCoin,
-  AdminFeeTier,
-  AdminPair,
-  AdminUser,
-  MOCK_ADMIN_COINS,
-  MOCK_ADMIN_PAIRS,
-  MOCK_ADMIN_USERS,
-  MOCK_FEE_TIERS,
-} from "@/lib/mock-data";
 
 type AdminSection = "coins" | "pairs" | "users" | "fees";
+type FeeField = keyof Omit<AdminFeeTier, "id" | "name">;
 
 const sections: { id: AdminSection; label: string; icon: typeof Coins }[] = [
   { id: "coins", label: "Coins", icon: Coins },
   { id: "pairs", label: "Pairs", icon: BadgeDollarSign },
   { id: "users", label: "Users", icon: Users },
   { id: "fees", label: "Fees", icon: Settings },
+];
+
+const adminQueryKeys = [
+  getGetAdminOverviewQueryKey(),
+  getListAdminActivityQueryKey(),
+  getListAdminCoinsQueryKey(),
+  getListAdminPairsQueryKey(),
+  getListAdminUsersQueryKey(),
+  getListAdminFeeTiersQueryKey(),
 ];
 
 const statusClass = (status: string) => {
@@ -41,30 +68,79 @@ const currency = (value: number) =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
 export default function Admin() {
+  const queryClient = useQueryClient();
   const [section, setSection] = useState<AdminSection>("coins");
   const [query, setQuery] = useState("");
-  const [coins, setCoins] = useState<AdminCoin[]>(MOCK_ADMIN_COINS);
-  const [pairs, setPairs] = useState<AdminPair[]>(MOCK_ADMIN_PAIRS);
-  const [users, setUsers] = useState<AdminUser[]>(MOCK_ADMIN_USERS);
-  const [fees, setFees] = useState<AdminFeeTier[]>(MOCK_FEE_TIERS);
   const [coinForm, setCoinForm] = useState({ symbol: "", name: "", network: "", price: "" });
   const [pairForm, setPairForm] = useState({ base: "", quote: "USDT", minOrder: "10", maxLeverage: "20" });
   const [userForm, setUserForm] = useState({ name: "", email: "", role: "User" as AdminUser["role"] });
-  const [activity, setActivity] = useState<string[]>(["Mock admin workspace loaded. No live database is connected."]);
+  const [feeDrafts, setFeeDrafts] = useState<Record<number, Omit<AdminFeeTier, "id" | "name">>>({});
+  const [message, setMessage] = useState("");
 
-  const addActivity = (message: string) => {
-    setActivity((items) => [message, ...items].slice(0, 6));
+  const overviewQuery = useGetAdminOverview();
+  const activityQuery = useListAdminActivity();
+  const coinsQuery = useListAdminCoins();
+  const pairsQuery = useListAdminPairs();
+  const usersQuery = useListAdminUsers();
+  const feesQuery = useListAdminFeeTiers();
+
+  const coins = coinsQuery.data ?? [];
+  const pairs = pairsQuery.data ?? [];
+  const users = usersQuery.data ?? [];
+  const fees = feesQuery.data ?? [];
+  const activity = activityQuery.data ?? [];
+  const loading = overviewQuery.isLoading || coinsQuery.isLoading || pairsQuery.isLoading || usersQuery.isLoading || feesQuery.isLoading;
+  const error = overviewQuery.error || activityQuery.error || coinsQuery.error || pairsQuery.error || usersQuery.error || feesQuery.error;
+
+  useEffect(() => {
+    if (!fees.length) return;
+    setFeeDrafts((current) => {
+      const next = { ...current };
+      for (const fee of fees) {
+        if (!next[fee.id]) {
+          next[fee.id] = {
+            makerFee: fee.makerFee,
+            takerFee: fee.takerFee,
+            withdrawalFee: fee.withdrawalFee,
+            minVolume: fee.minVolume,
+          };
+        }
+      }
+      return next;
+    });
+  }, [fees]);
+
+  const invalidateAdmin = async () => {
+    await Promise.all(adminQueryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
   };
 
-  const summary = useMemo(
-    () => [
-      { label: "Listed Coins", value: coins.filter((coin) => coin.status === "Listed").length, note: `${coins.length} total` },
-      { label: "Active Pairs", value: pairs.filter((pair) => pair.status === "Active").length, note: `${pairs.length} markets` },
-      { label: "Users", value: users.length, note: `${users.filter((user) => user.kyc === "Pending").length} KYC pending` },
-      { label: "Top Fee Tier", value: `${Math.min(...fees.map((fee) => fee.makerFee)).toFixed(3)}%`, note: "maker fee" },
-    ],
-    [coins, pairs, users, fees],
-  );
+  const mutationOptions = (successMessage: string) => ({
+    mutation: {
+      onSuccess: async () => {
+        await invalidateAdmin();
+        setMessage(successMessage);
+      },
+      onError: (err: unknown) => setMessage(err instanceof Error ? err.message : "Request failed"),
+    },
+  });
+
+  const createCoinMutation = useCreateAdminCoin(mutationOptions("Coin saved to database."));
+  const createPairMutation = useCreateAdminPair(mutationOptions("Trading pair saved to database."));
+  const createUserMutation = useCreateAdminUser(mutationOptions("User saved to database."));
+  const deleteCoinMutation = useDeleteAdminCoin(mutationOptions("Coin deleted from database."));
+  const deletePairMutation = useDeleteAdminPair(mutationOptions("Trading pair deleted from database."));
+  const deleteUserMutation = useDeleteAdminUser(mutationOptions("User deleted from database."));
+  const updateFeeMutation = useUpdateAdminFeeTier(mutationOptions("Fee setup saved to database."));
+
+  const summary = useMemo(() => {
+    const overview = overviewQuery.data;
+    return [
+      { label: "Listed Coins", value: overview?.listedCoins ?? 0, note: `${overview?.totalCoins ?? coins.length} total` },
+      { label: "Active Pairs", value: overview?.activePairs ?? 0, note: `${overview?.totalPairs ?? pairs.length} markets` },
+      { label: "Users", value: overview?.users ?? users.length, note: `${overview?.pendingKyc ?? 0} KYC pending` },
+      { label: "Top Fee Tier", value: `${(overview?.topMakerFee ?? 0).toFixed(3)}%`, note: "maker fee" },
+    ];
+  }, [overviewQuery.data, coins.length, pairs.length, users.length]);
 
   const filteredCoins = coins.filter((coin) =>
     `${coin.symbol} ${coin.name} ${coin.network}`.toLowerCase().includes(query.toLowerCase()),
@@ -78,79 +154,55 @@ export default function Admin() {
 
   const createCoin = () => {
     if (!coinForm.symbol.trim() || !coinForm.name.trim()) return;
-    const symbol = coinForm.symbol.trim().toUpperCase();
-    setCoins((items) => [
-      {
-        id: `coin-${symbol.toLowerCase()}-${Date.now()}`,
-        symbol,
+    createCoinMutation.mutate({
+      data: {
+        symbol: coinForm.symbol.trim().toUpperCase(),
         name: coinForm.name.trim(),
-        network: coinForm.network.trim() || symbol,
+        network: coinForm.network.trim() || coinForm.symbol.trim().toUpperCase(),
         price: Number(coinForm.price) || 0,
-        status: "Review",
-        depositEnabled: false,
-        withdrawalEnabled: false,
       },
-      ...items,
-    ]);
+    });
     setCoinForm({ symbol: "", name: "", network: "", price: "" });
-    addActivity(`Created mock coin ${symbol}.`);
   };
 
   const createPair = () => {
     if (!pairForm.base.trim() || !pairForm.quote.trim()) return;
-    const base = pairForm.base.trim().toUpperCase();
-    const quote = pairForm.quote.trim().toUpperCase();
-    setPairs((items) => [
-      {
-        id: `pair-${base.toLowerCase()}-${quote.toLowerCase()}-${Date.now()}`,
-        base,
-        quote,
+    createPairMutation.mutate({
+      data: {
+        base: pairForm.base.trim().toUpperCase(),
+        quote: pairForm.quote.trim().toUpperCase(),
         minOrder: Number(pairForm.minOrder) || 0,
         maxLeverage: Number(pairForm.maxLeverage) || 1,
-        status: "Active",
       },
-      ...items,
-    ]);
+    });
     setPairForm({ base: "", quote: "USDT", minOrder: "10", maxLeverage: "20" });
-    addActivity(`Created mock pair ${base}/${quote}.`);
   };
 
   const createUser = () => {
     if (!userForm.name.trim() || !userForm.email.trim()) return;
-    setUsers((items) => [
-      {
-        id: `user-${Date.now()}`,
+    createUserMutation.mutate({
+      data: {
         name: userForm.name.trim(),
         email: userForm.email.trim(),
         role: userForm.role,
-        kyc: "Pending",
-        status: "Active",
-        balance: 0,
       },
-      ...items,
-    ]);
+    });
     setUserForm({ name: "", email: "", role: "User" });
-    addActivity(`Created mock user ${userForm.email}.`);
   };
 
-  const deleteCoin = (coin: AdminCoin) => {
-    setCoins((items) => items.filter((item) => item.id !== coin.id));
-    setPairs((items) => items.filter((item) => item.base !== coin.symbol && item.quote !== coin.symbol));
-    addActivity(`Deleted coin ${coin.symbol} and matching mock pairs.`);
+  const updateFeeDraft = (id: number, key: FeeField, value: string) => {
+    setFeeDrafts((items) => ({
+      ...items,
+      [id]: {
+        ...(items[id] ?? { makerFee: 0, takerFee: 0, withdrawalFee: 0, minVolume: 0 }),
+        [key]: Number(value) || 0,
+      },
+    }));
   };
 
-  const deletePair = (pair: AdminPair) => {
-    setPairs((items) => items.filter((item) => item.id !== pair.id));
-    addActivity(`Deleted pair ${pair.base}/${pair.quote}.`);
-  };
-
-  const deleteUser = (user: AdminUser) => {
-    setUsers((items) => items.filter((item) => item.id !== user.id));
-    addActivity(`Deleted user ${user.email}.`);
-  };
-
-  const updateFee = (id: string, key: keyof Omit<AdminFeeTier, "id" | "name">, value: string) => {
-    setFees((items) => items.map((fee) => (fee.id === id ? { ...fee, [key]: Number(value) || 0 } : fee)));
+  const saveFees = async () => {
+    const changes = fees.filter((fee) => feeDrafts[fee.id]);
+    await Promise.all(changes.map((fee) => updateFeeMutation.mutateAsync({ id: fee.id, data: feeDrafts[fee.id] })));
   };
 
   return (
@@ -161,12 +213,17 @@ export default function Admin() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/10 text-primary text-xs font-medium mb-4">
                 <ShieldCheck size={14} />
-                Admin setup uses mock data only
+                Live PostgreSQL admin database connected
               </div>
               <h1 className="text-4xl font-bold tracking-tight">Exchange Admin Panel</h1>
               <p className="text-muted-foreground mt-2 max-w-2xl">
-                Manage coin listings, trading pairs, users, and platform fee tiers without a live database connection.
+                Manage coin listings, trading pairs, users, and platform fee tiers with live backend data.
               </p>
+              {(message || error) && (
+                <div className={`mt-3 text-xs ${error ? "text-destructive" : "text-primary"}`}>
+                  {error instanceof Error ? error.message : message}
+                </div>
+              )}
             </div>
             <div className="relative w-full lg:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
@@ -184,7 +241,7 @@ export default function Admin() {
             {summary.map((item) => (
               <div key={item.label} className="bg-card border border-border rounded-xl p-4">
                 <div className="text-xs text-muted-foreground">{item.label}</div>
-                <div className="text-2xl font-bold font-mono mt-2">{item.value}</div>
+                <div className="text-2xl font-bold font-mono mt-2">{loading ? <Loader2 className="animate-spin" size={20} /> : item.value}</div>
                 <div className="text-xs text-primary mt-1">{item.note}</div>
               </div>
             ))}
@@ -209,13 +266,14 @@ export default function Admin() {
           ))}
 
           <div className="bg-card border border-border rounded-xl p-4 mt-6">
-            <h3 className="font-semibold text-sm mb-3">Recent mock actions</h3>
+            <h3 className="font-semibold text-sm mb-3">Recent live actions</h3>
             <div className="space-y-3">
-              {activity.map((item, index) => (
-                <div key={`${item}-${index}`} className="text-xs text-muted-foreground border-l border-primary/40 pl-3">
-                  {item}
+              {activity.map((item) => (
+                <div key={item.id} className="text-xs text-muted-foreground border-l border-primary/40 pl-3">
+                  {item.message}
                 </div>
               ))}
+              {!activity.length && <div className="text-xs text-muted-foreground">No activity yet.</div>}
             </div>
           </div>
         </aside>
@@ -230,8 +288,8 @@ export default function Admin() {
                   <Input value={coinForm.name} onChange={(event) => setCoinForm({ ...coinForm, name: event.target.value })} placeholder="Coin name" />
                   <Input value={coinForm.network} onChange={(event) => setCoinForm({ ...coinForm, network: event.target.value })} placeholder="Network" />
                   <Input value={coinForm.price} onChange={(event) => setCoinForm({ ...coinForm, price: event.target.value })} placeholder="Price" type="number" />
-                  <Button onClick={createCoin} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2" data-testid="btn-create-coin">
-                    <Plus size={15} /> Add Coin
+                  <Button onClick={createCoin} disabled={createCoinMutation.isPending} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2" data-testid="btn-create-coin">
+                    {createCoinMutation.isPending ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />} Add Coin
                   </Button>
                 </div>
               </div>
@@ -264,7 +322,7 @@ export default function Admin() {
                           </div>
                         </Td>
                         <Td align="right">
-                          <Button size="sm" variant="outline" onClick={() => deleteCoin(coin)} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-testid={`btn-delete-coin-${coin.symbol}`}>
+                          <Button size="sm" variant="outline" onClick={() => deleteCoinMutation.mutate({ id: coin.id })} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-testid={`btn-delete-coin-${coin.symbol}`}>
                             <Trash2 size={14} />
                           </Button>
                         </Td>
@@ -285,8 +343,8 @@ export default function Admin() {
                   <Input value={pairForm.quote} onChange={(event) => setPairForm({ ...pairForm, quote: event.target.value })} placeholder="Quote coin" />
                   <Input value={pairForm.minOrder} onChange={(event) => setPairForm({ ...pairForm, minOrder: event.target.value })} placeholder="Min order" type="number" />
                   <Input value={pairForm.maxLeverage} onChange={(event) => setPairForm({ ...pairForm, maxLeverage: event.target.value })} placeholder="Leverage" type="number" />
-                  <Button onClick={createPair} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2" data-testid="btn-create-pair">
-                    <Plus size={15} /> Add Pair
+                  <Button onClick={createPair} disabled={createPairMutation.isPending} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2" data-testid="btn-create-pair">
+                    {createPairMutation.isPending ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />} Add Pair
                   </Button>
                 </div>
               </div>
@@ -310,7 +368,7 @@ export default function Admin() {
                         <Td align="right" mono>{pair.maxLeverage}x</Td>
                         <Td><Pill value={pair.status} /></Td>
                         <Td align="right">
-                          <Button size="sm" variant="outline" onClick={() => deletePair(pair)} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-testid={`btn-delete-pair-${pair.base}-${pair.quote}`}>
+                          <Button size="sm" variant="outline" onClick={() => deletePairMutation.mutate({ id: pair.id })} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-testid={`btn-delete-pair-${pair.base}-${pair.quote}`}>
                             <Trash2 size={14} />
                           </Button>
                         </Td>
@@ -338,8 +396,8 @@ export default function Admin() {
                     <option>Trader</option>
                     <option>Admin</option>
                   </select>
-                  <Button onClick={createUser} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2" data-testid="btn-create-user">
-                    <Plus size={15} /> Add User
+                  <Button onClick={createUser} disabled={createUserMutation.isPending} className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2" data-testid="btn-create-user">
+                    {createUserMutation.isPending ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />} Add User
                   </Button>
                 </div>
               </div>
@@ -368,7 +426,7 @@ export default function Admin() {
                         <Td><Pill value={user.status} /></Td>
                         <Td align="right" mono>{currency(user.balance)}</Td>
                         <Td align="right">
-                          <Button size="sm" variant="outline" onClick={() => deleteUser(user)} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-testid={`btn-delete-user-${user.id}`}>
+                          <Button size="sm" variant="outline" onClick={() => deleteUserMutation.mutate({ id: user.id })} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-testid={`btn-delete-user-${user.id}`}>
                             <Trash2 size={14} />
                           </Button>
                         </Td>
@@ -383,22 +441,25 @@ export default function Admin() {
           {section === "fees" && (
             <DataPanel title="Fee admin setup">
               <div className="grid gap-4">
-                {fees.map((fee) => (
-                  <div key={fee.id} className="grid lg:grid-cols-[1fr_repeat(4,140px)] gap-3 p-4 rounded-lg border border-border bg-secondary/20">
-                    <div>
-                      <div className="font-semibold">{fee.name}</div>
-                      <div className="text-xs text-muted-foreground">Mock tier configuration</div>
+                {fees.map((fee) => {
+                  const draft = feeDrafts[fee.id] ?? fee;
+                  return (
+                    <div key={fee.id} className="grid lg:grid-cols-[1fr_repeat(4,140px)] gap-3 p-4 rounded-lg border border-border bg-secondary/20">
+                      <div>
+                        <div className="font-semibold">{fee.name}</div>
+                        <div className="text-xs text-muted-foreground">Live tier configuration</div>
+                      </div>
+                      <FeeInput label="Maker %" value={draft.makerFee} onChange={(value) => updateFeeDraft(fee.id, "makerFee", value)} />
+                      <FeeInput label="Taker %" value={draft.takerFee} onChange={(value) => updateFeeDraft(fee.id, "takerFee", value)} />
+                      <FeeInput label="Withdraw" value={draft.withdrawalFee} onChange={(value) => updateFeeDraft(fee.id, "withdrawalFee", value)} />
+                      <FeeInput label="Min Volume" value={draft.minVolume} onChange={(value) => updateFeeDraft(fee.id, "minVolume", value)} />
                     </div>
-                    <FeeInput label="Maker %" value={fee.makerFee} onChange={(value) => updateFee(fee.id, "makerFee", value)} />
-                    <FeeInput label="Taker %" value={fee.takerFee} onChange={(value) => updateFee(fee.id, "takerFee", value)} />
-                    <FeeInput label="Withdraw" value={fee.withdrawalFee} onChange={(value) => updateFee(fee.id, "withdrawalFee", value)} />
-                    <FeeInput label="Min Volume" value={fee.minVolume} onChange={(value) => updateFee(fee.id, "minVolume", value)} />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="mt-5 flex justify-end">
-                <Button onClick={() => addActivity("Saved mock fee setup changes.")} className="bg-primary text-primary-foreground hover:bg-primary/90" data-testid="btn-save-fees">
-                  Save Fee Setup
+                <Button onClick={saveFees} disabled={updateFeeMutation.isPending} className="bg-primary text-primary-foreground hover:bg-primary/90" data-testid="btn-save-fees">
+                  {updateFeeMutation.isPending ? "Saving..." : "Save Fee Setup"}
                 </Button>
               </div>
             </DataPanel>
@@ -414,7 +475,7 @@ function DataPanel({ title, children }: { title: string; children: React.ReactNo
     <section className="bg-card border border-border rounded-xl overflow-hidden">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between">
         <h2 className="font-semibold text-lg">{title}</h2>
-        <span className="text-xs text-muted-foreground">Mock records</span>
+        <span className="text-xs text-muted-foreground">Live DB records</span>
       </div>
       <div className="overflow-x-auto">{children}</div>
     </section>
