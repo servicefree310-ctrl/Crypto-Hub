@@ -3,11 +3,13 @@ import * as Haptics from "expo-haptics";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  StyleSheet, StatusBar, Platform, Animated, ScrollView
+  StyleSheet, StatusBar, Platform, Animated, ScrollView, ActivityIndicator
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery } from "@tanstack/react-query";
 
 import { useColors } from "@/hooks/useColors";
+import { marketApi } from "@/lib/api";
 
 interface Coin {
   id: string; symbol: string; name: string; price: number; change: number;
@@ -146,10 +148,15 @@ function CoinRow({ item, fav, onFav }: { item: Coin; fav: boolean; onFav: () => 
 
 const CATS = ["All","Spot","Futures","Gainers","Losers","⭐"];
 
+const COIN_COLORS: Record<string, string> = {
+  BTC:"#F7931A", ETH:"#627EEA", BNB:"#F3BA2F", SOL:"#9945FF",
+  XRP:"#00AAE4", ADA:"#0033AD", DOGE:"#C2A633", DOT:"#E6007A",
+  AVAX:"#E84142", LINK:"#2A5ADA", USDT:"#26A17B",
+};
+
 export default function MarketsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [coins, setCoins] = useState<Coin[]>(BASE_COINS);
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("All");
   const [sortBy, setSortBy] = useState<"vol"|"change"|"price"|"mcap">("vol");
@@ -159,16 +166,26 @@ export default function MarketsScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : 0;
 
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setCoins(prev => prev.map(c => ({
-        ...c,
-        price: c.price * (1 + (Math.random() - 0.499) * 0.0012),
-        history: [...c.history.slice(1), c.price * (1 + (Math.random() - 0.499) * 0.0012)],
-      })));
-    }, 1600);
-    return () => clearInterval(iv);
-  }, []);
+  const { data: marketsData = [], isLoading: marketsLoading } = useQuery({
+    queryKey: ["mobile-markets"],
+    queryFn: marketApi.getMarkets,
+    refetchInterval: 30000,
+  });
+
+  const coins: Coin[] = marketsData.map((m: any) => ({
+    id: m.base?.toLowerCase() ?? m.symbol?.toLowerCase(),
+    symbol: m.base ?? m.symbol,
+    name: m.base ?? m.symbol,
+    price: m.price ?? 0,
+    change: m.change24h ?? 0,
+    vol24h: m.volume24h ? `${(m.volume24h / 1e9).toFixed(1)}B` : "0",
+    mcap: "--",
+    color: COIN_COLORS[m.base] ?? "#888",
+    history: Array.from({ length: 10 }, () => (m.price ?? 0) * (1 + (Math.random() - 0.499) * 0.05)),
+    high24h: m.high24h ?? 0,
+    low24h: m.low24h ?? 0,
+    rank: 0,
+  }));
 
   const toggleFav = useCallback((id: string) => {
     setFavorites(f => f.includes(id) ? f.filter(x => x !== id) : [...f, id]);
@@ -192,10 +209,6 @@ export default function MarketsScreen() {
       let v = 0;
       if (sortBy === "change") v = a.change - b.change;
       else if (sortBy === "price") v = a.price - b.price;
-      else if (sortBy === "mcap") {
-        const parse = (s: string) => parseFloat(s) * (s.includes("T") ? 1e12 : s.includes("B") ? 1e9 : 1e6);
-        v = parse(a.mcap) - parse(b.mcap);
-      }
       return v * sortDir;
     });
 
@@ -314,6 +327,15 @@ export default function MarketsScreen() {
         ListHeaderComponent={ListHeader}
         renderItem={({ item }) => (
           <CoinRow item={item} fav={favorites.includes(item.id)} onFav={() => toggleFav(item.id)} />
+        )}
+        ListEmptyComponent={marketsLoading ? (
+          <View style={{ padding: 40, alignItems: "center" }}>
+            <ActivityIndicator color="#fcd535" size="large" />
+          </View>
+        ) : (
+          <View style={{ padding: 40, alignItems: "center" }}>
+            <Text style={{ color: "#888", fontSize: 14 }}>No markets found</Text>
+          </View>
         )}
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? bottomPad + 84 : 90 }}
         showsVerticalScrollIndicator={false}

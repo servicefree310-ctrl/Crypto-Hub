@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Zap, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -14,6 +15,8 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { login } = useAuth();
+  const [, navigate] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,9 +25,15 @@ export default function Login() {
       return;
     }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
-    toast({ title: "Login Successful", description: "Welcome back to CryptoX!" });
+    try {
+      await login(email, password);
+      toast({ title: "Login Successful", description: "Welcome back to CryptoX!" });
+      navigate("/");
+    } catch (err: any) {
+      toast({ title: "Login Failed", description: err?.response?.data?.error ?? "Invalid credentials", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

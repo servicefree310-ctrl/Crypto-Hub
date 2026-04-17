@@ -2,11 +2,12 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, Switch, Modal, TextInput
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, Switch, Modal, TextInput, Alert
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 
 const VIP_LEVELS = [
   { level:0, vol:"0",   fee:"0.10/0.10", reward:"Standard" },
@@ -40,6 +41,7 @@ const ACHIEVEMENTS = [
 export default function AccountScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { user, isAuthenticated, logout } = useAuth();
   const [biometric, setBiometric] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [priceAlert, setPriceAlert] = useState(false);
@@ -51,6 +53,17 @@ export default function AccountScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : 0;
   const vipProgress = 12847 / 1000000;
   const REFERRAL_CODE = "CXUSER8421";
+
+  const handleLogout = () => {
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign Out", style: "destructive", onPress: () => logout() },
+    ]);
+  };
+
+  const displayName = user ? (user.firstName ? `${user.firstName}` : user.email.split("@")[0]) : "CryptoX User";
+  const displayEmail = user?.email ?? "user@cryptox.com";
+  const displayInitials = displayName.slice(0, 2).toUpperCase();
 
   const sections = [
     {
@@ -121,7 +134,7 @@ export default function AccountScreen() {
         <View style={[styles.profileCard, { paddingTop: topPad+12, backgroundColor: colors.card }]}>
           <View style={styles.avatarWrap}>
             <View style={[styles.avatar, { backgroundColor: colors.primary+"22" }]}>
-              <Text style={[styles.avatarText, { color: colors.primary }]}>CX</Text>
+              <Text style={[styles.avatarText, { color: colors.primary }]}>{displayInitials}</Text>
             </View>
             <View style={[styles.verifiedBadge, { backgroundColor: colors.success }]}>
               <Feather name="check" size={8} color="#fff" />
@@ -129,13 +142,13 @@ export default function AccountScreen() {
           </View>
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
-              <Text style={[styles.profileName, { color: colors.foreground }]}>CryptoX User</Text>
+              <Text style={[styles.profileName, { color: colors.foreground }]}>{displayName}</Text>
               <View style={[styles.vipBadge, { backgroundColor: colors.primary+"22" }]}>
                 <Text style={[styles.vipText, { color: colors.primary }]}>VIP 0</Text>
               </View>
             </View>
-            <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>user@cryptox.com</Text>
-            <Text style={[styles.profileUid, { color: colors.mutedForeground }]}>UID: 581 234 789</Text>
+            <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>{displayEmail}</Text>
+            <Text style={[styles.profileUid, { color: colors.mutedForeground }]}>KYC: {user?.kycStatus ?? "Pending"}</Text>
           </View>
           <TouchableOpacity style={[styles.editBtn, { borderColor: colors.border }]}>
             <Feather name="edit-2" size={14} color={colors.mutedForeground} />
@@ -324,10 +337,10 @@ export default function AccountScreen() {
 
         {/* Logout */}
         <TouchableOpacity testID="btn-logout"
-          onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleLogout(); }}
           style={[styles.logoutBtn, { backgroundColor: colors.card, borderColor: colors.destructive+"40" }]}>
           <Feather name="log-out" size={16} color={colors.destructive} />
-          <Text style={[styles.logoutText, { color: colors.destructive }]}>Log Out</Text>
+          <Text style={[styles.logoutText, { color: colors.destructive }]}>{isAuthenticated ? "Sign Out" : "Sign In"}</Text>
         </TouchableOpacity>
 
         <Text style={[styles.versionText, { color: colors.mutedForeground }]}>CryptoX Mobile v1.0.0 · Build 2024</Text>

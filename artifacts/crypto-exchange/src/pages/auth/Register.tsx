@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Zap, Eye, EyeOff, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 function getPasswordStrength(p: string) {
   if (!p) return 0;
@@ -22,7 +23,7 @@ const strengthColors = ["", "#f6465d", "#fcd535", "#0ecb81", "#0ecb81"];
 
 export default function Register() {
   const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
+  const [firstName, setFirstName] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -30,13 +31,15 @@ export default function Register() {
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { register } = useAuth();
+  const [, navigate] = useLocation();
 
   const strength = getPasswordStrength(password);
   const passwordsMatch = password === confirm && confirm !== "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !username || !password || !confirm) {
+    if (!email || !password || !confirm) {
       toast({ title: "Validation Error", description: "Please fill in all fields", variant: "destructive" });
       return;
     }
@@ -49,9 +52,15 @@ export default function Register() {
       return;
     }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1500));
-    setLoading(false);
-    toast({ title: "Account Created!", description: "Welcome to CryptoX! Start trading now." });
+    try {
+      await register(email, password, firstName);
+      toast({ title: "Account Created!", description: "Welcome to CryptoX! You start with 1000 USDT. Start trading!" });
+      navigate("/");
+    } catch (err: any) {
+      toast({ title: "Registration Failed", description: err?.response?.data?.error ?? "Could not create account", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,14 +93,14 @@ export default function Register() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="username" className="text-sm text-muted-foreground">Username</Label>
+              <Label htmlFor="firstName" className="text-sm text-muted-foreground">First Name (optional)</Label>
               <Input
-                id="username"
+                id="firstName"
                 data-testid="input-username"
                 type="text"
-                placeholder="Choose a username"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
+                placeholder="Your first name"
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
                 className="bg-secondary border-border focus-visible:ring-primary h-10"
               />
             </div>

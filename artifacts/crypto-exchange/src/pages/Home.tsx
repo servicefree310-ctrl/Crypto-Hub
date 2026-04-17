@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { TrendingUp, TrendingDown, ArrowRight, BarChart2, Globe, Activity, Layers } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowRight, BarChart2, Globe, Activity, Layers, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MOCK_COINS } from "@/lib/mock-data";
+import { useQuery } from "@tanstack/react-query";
+import { marketApi } from "@/lib/api";
 
 const TICKER_COINS = [
   { symbol: "BTC/USDT", price: 64250.50, change: 2.5 },
@@ -89,10 +90,16 @@ function MiniSparkline({ positive }: { positive: boolean }) {
 export default function Home() {
   const [btcPrice, setBtcPrice] = useState(64250.50);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortKey, setSortKey] = useState<string>("marketCap");
+  const [sortKey, setSortKey] = useState<string>("price");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [filter, setFilter] = useState<"all" | "gainers" | "losers">("all");
   const prevBtcRef = useRef(btcPrice);
+
+  const { data: markets = [], isLoading: marketsLoading } = useQuery({
+    queryKey: ["markets"],
+    queryFn: marketApi.getMarkets,
+    refetchInterval: 30000,
+  });
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -105,6 +112,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
+  const btcMarket = markets.find((m: any) => m.symbol === "BTCUSDT");
   const btcUp = btcPrice >= prevBtcRef.current;
 
   const handleSort = (key: string) => {
@@ -112,19 +120,19 @@ export default function Home() {
     else { setSortKey(key); setSortDir("desc"); }
   };
 
-  const filteredCoins = MOCK_COINS
-    .filter(c => {
+  const filteredCoins = markets
+    .filter((c: any) => {
       const q = searchQuery.toLowerCase();
-      if (q && !c.symbol.toLowerCase().includes(q) && !c.name.toLowerCase().includes(q)) return false;
-      if (filter === "gainers" && c.change24h < 0) return false;
-      if (filter === "losers" && c.change24h >= 0) return false;
+      if (q && !c.base?.toLowerCase().includes(q) && !c.symbol?.toLowerCase().includes(q)) return false;
+      if (filter === "gainers" && (c.change24h ?? 0) < 0) return false;
+      if (filter === "losers" && (c.change24h ?? 0) >= 0) return false;
       return true;
     })
-    .sort((a, b) => {
+    .sort((a: any, b: any) => {
       let av: number, bv: number;
-      if (sortKey === "price") { av = a.price; bv = b.price; }
-      else if (sortKey === "change24h") { av = a.change24h; bv = b.change24h; }
-      else { av = parseFloat(a.marketCap); bv = parseFloat(b.marketCap); }
+      if (sortKey === "price") { av = a.price ?? 0; bv = b.price ?? 0; }
+      else if (sortKey === "change24h") { av = a.change24h ?? 0; bv = b.change24h ?? 0; }
+      else { av = a.quoteVolume24h ?? 0; bv = b.quoteVolume24h ?? 0; }
       return sortDir === "desc" ? bv - av : av - bv;
     });
 
@@ -297,67 +305,73 @@ export default function Home() {
                   <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">24h Volume</th>
                   <th
                     className="text-right px-4 py-3 text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none hidden lg:table-cell"
-                    onClick={() => handleSort("marketCap")}
+                    onClick={() => handleSort("volume")}
                     data-testid="th-marketcap"
                   >
-                    Market Cap <SortIcon col="marketCap" />
+                    Quote Volume <SortIcon col="volume" />
                   </th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground hidden xl:table-cell">7d Chart</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredCoins.map((coin, i) => (
-                  <tr
-                    key={coin.symbol}
-                    data-testid={`row-coin-${coin.symbol}`}
-                    className="border-b border-border/50 hover:bg-secondary/30 transition-colors group"
-                  >
-                    <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{i + 1}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                          {coin.symbol.slice(0, 1)}
+                {marketsLoading ? (
+                  <tr><td colSpan={8} className="px-4 py-12 text-center"><Loader2 size={24} className="animate-spin mx-auto text-primary" /></td></tr>
+                ) : filteredCoins.length === 0 ? (
+                  <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">No markets found</td></tr>
+                ) : filteredCoins.map((coin: any, i: number) => {
+                  const price = coin.price ?? 0;
+                  const change = coin.change24h ?? 0;
+                  const vol = coin.volume24h ? `$${(coin.volume24h).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "--";
+                  const qvol = coin.quoteVolume24h ? `$${(coin.quoteVolume24h / 1e6).toFixed(1)}M` : "--";
+                  return (
+                    <tr
+                      key={coin.symbol}
+                      data-testid={`row-coin-${coin.symbol}`}
+                      className="border-b border-border/50 hover:bg-secondary/30 transition-colors group"
+                    >
+                      <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{i + 1}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                            {(coin.base ?? coin.symbol).slice(0, 1)}
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-foreground">{coin.base ?? coin.symbol}</div>
+                            <div className="text-xs text-muted-foreground">{coin.base}/{coin.quote}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm font-semibold text-foreground">{coin.symbol}</div>
-                          <div className="text-xs text-muted-foreground">{coin.name}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-sm font-mono text-foreground">
+                          ${price >= 1 ? price.toLocaleString("en-US", { minimumFractionDigits: 2 }) : price.toFixed(6)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className={`flex items-center justify-end gap-1 text-sm font-mono font-medium ${change >= 0 ? "text-success" : "text-destructive"}`}>
+                          {change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                          {change >= 0 ? "+" : ""}{change.toFixed(2)}%
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="text-sm font-mono text-foreground">
-                        ${coin.price >= 1 ? coin.price.toLocaleString("en-US", { minimumFractionDigits: 2 }) : coin.price.toFixed(4)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`flex items-center justify-end gap-1 text-sm font-mono font-medium ${coin.change24h >= 0 ? "text-success" : "text-destructive"}`}>
-                        {coin.change24h >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {coin.change24h >= 0 ? "+" : ""}{coin.change24h.toFixed(2)}%
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right hidden md:table-cell">
-                      <span className="text-sm font-mono text-muted-foreground">{coin.volume}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right hidden lg:table-cell">
-                      <span className="text-sm font-mono text-muted-foreground">{coin.marketCap}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right hidden xl:table-cell">
-                      <MiniSparkline positive={coin.change24h >= 0} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link href="/trade" data-testid={`btn-trade-${coin.symbol}`}>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
-                        >
-                          Trade
-                        </Button>
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3 text-right hidden md:table-cell">
+                        <span className="text-sm font-mono text-muted-foreground">{vol}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right hidden lg:table-cell">
+                        <span className="text-sm font-mono text-muted-foreground">{qvol}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right hidden xl:table-cell">
+                        <MiniSparkline positive={change >= 0} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link href="/trade" data-testid={`btn-trade-${coin.symbol}`}>
+                          <Button size="sm" variant="outline" className="text-xs border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all">
+                            Trade
+                          </Button>
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
