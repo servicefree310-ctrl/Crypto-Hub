@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/"
+previewPath = "/exchange-admin/"
 title = "Exchange Admin"
 version = "1.0.0"
 id = "artifacts/exchange-admin"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/" ]
+paths = [ "/exchange-admin/" ]
 localPort = 25489
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "25489"
-BASE_PATH = "/"
+BASE_PATH = "/exchange-admin/"

@@ -67,6 +67,9 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ### exchange-admin (React + Vite)
 
 - **Path**: `artifacts/exchange-admin/`
-- **Description**: Registered standalone preview containing the CryptoX admin experience.
-- **Admin features**: Live coin list/create/delete, trading pair create/delete, user create/delete, fee tier editing, activity feed, overview metrics.
+- **Description**: Standalone admin-only CryptoX operations panel, separate from the user exchange app.
+- **Tech**: React + Vite, Tailwind CSS, Axios API service, React Router protected routes.
+- **Authentication**: Admin login uses `POST /api/admin/login` and stores the returned signed session token in browser session storage. Default development credentials are `admin@cryptox.local` / `admin123` unless `ADMIN_DEMO_PASSWORD` is set.
+- **Admin features**: Protected dashboard with stats/charts, user management with block/unblock, KYC approve/reject, INR deposit approvals, INR withdrawal approvals, crypto withdrawal approvals, transactions/ledger table, market enable/disable, roles and permissions, settings.
 - **Data source**: PostgreSQL via the shared API server `/api/admin/*` routes.
+- **Local behavior**: `pnpm --filter @workspace/exchange-admin run dev` starts the admin frontend and proxies `/api` to the shared API server on port `8080`.

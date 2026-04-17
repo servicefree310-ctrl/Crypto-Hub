@@ -1,0 +1,119 @@
+Create a complete standalone Admin Panel web application for a cryptocurrency exchange.
+
+IMPORTANT:
+- This must be a completely separate project (NOT part of user web app)
+- It should connect to an existing backend API
+- No user-facing UI, admin only
+
+Tech Stack:
+- React.js (Vite)
+- Tailwind CSS
+- Axios (API calls)
+- React Router
+
+Authentication:
+- Admin login system
+- JWT token stored securely
+- Protect all admin routes
+- Role-based access control (RBAC)
+
+Pages:
+
+1. Admin Login Page
+- Email + Password
+- Login API: POST /api/admin/login
+- Redirect to dashboard after login
+
+2. Dashboard
+- Show stats:
+  - Total users
+  - Total deposits (INR + Crypto)
+  - Total withdrawals
+  - Trading volume
+- Use cards + charts
+
+3. User Management
+- List all users
+- Search/filter users
+- View user details
+- Block/Unblock user
+- API:
+  GET /api/admin/users
+  POST /api/admin/user/block
+
+4. KYC Management
+- View pending KYC requests
+- Approve / Reject KYC
+- API:
+  GET /api/admin/kyc
+  POST /api/admin/kyc/approve
+
+5. INR Deposit Management
+- View all deposit requests
+- Approve / Reject deposits
+- API:
+  GET /api/admin/inr/deposits
+  POST /api/admin/inr/deposit/approve
+
+6. INR Withdraw Management
+- View withdraw requests
+- Approve / Reject withdraw
+- API:
+  GET /api/admin/inr/withdrawals
+  POST /api/admin/inr/withdraw/approve
+
+7. Crypto Withdraw Management
+- View crypto withdrawals
+- Approve / Reject
+- API:
+  GET /api/admin/crypto/withdrawals
+  POST /api/admin/crypto/withdraw/approve
+
+8. Transactions & Ledger
+- View all transactions
+- Filter by user, type, date
+- API:
+  GET /api/admin/transactions
+
+9. Market Management
+- Enable/disable trading pairs (BTC/USDT, BTC/INR)
+- API:
+  GET /api/admin/markets
+  POST /api/admin/market/toggle
+
+10. Roles & Permissions
+- Create roles (admin, support, finance)
+- Assign permissions
+- Assign roles to admin users
+- API:
+  GET /api/admin/roles
+  POST /api/admin/roles
+
+UI Design:
+- Professional dark dashboard
+- Sidebar navigation (Dashboard, Users, KYC, Deposits, Withdrawals, Markets, Settings)
+- Tables with pagination + search
+- Modal popups for approve/reject
+- Clean and minimal UI like Binance admin
+
+Security:
+- Protect all routes using middleware
+- Only allow admin role access
+- Logout functionality
+
+Project Structure:
+/src
+  /pages
+  /components
+  /services (API calls)
+  /routes
+  /utils (auth, token)
+
+/src/services/api.js:
+- Axios base URL = backend API
+
+Output:
+- Full working React admin panel
+- Clean reusable components
+- Ready to connect backend API
+- Instructions to run project

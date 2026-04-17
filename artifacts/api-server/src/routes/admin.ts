@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { asc, count, desc, eq, sql } from "drizzle-orm";
+import crypto from "node:crypto";
 import { z } from "zod/v4";
 import {
   adminActivityTable,
@@ -156,6 +157,53 @@ const PaymentGatewayBody = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
 });
 
+const AdminLoginBody = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+const IdBody = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+const ApprovalBody = z.object({
+  id: z.coerce.number().int().positive(),
+  status: z.enum(["Approved", "Rejected"]).default("Approved"),
+  reason: z.string().optional(),
+});
+
+const MarketToggleBody = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+const RoleBody = z.object({
+  name: z.string().min(2),
+  description: z.string().optional(),
+});
+
+const authSecret = process.env.ADMIN_JWT_SECRET ?? process.env.SESSION_SECRET ?? "dev-admin-secret";
+
+const signToken = (payload: Record<string, unknown>) => {
+  const encoded = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + 1000 * 60 * 60 * 12 })).toString("base64url");
+  const signature = crypto.createHmac("sha256", authSecret).update(encoded).digest("base64url");
+  return `${encoded}.${signature}`;
+};
+
+const verifyToken = (token: string) => {
+  const [encoded, signature] = token.split(".");
+  if (!encoded || !signature) return null;
+  const expected = crypto.createHmac("sha256", authSecret).update(encoded).digest("base64url");
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as { exp?: number; role?: string; email?: string };
+  if (!payload.exp || payload.exp < Date.now()) return null;
+  return payload;
+};
+
+const readAdminAuth = (header: string | undefined) => {
+  const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+  return token ? verifyToken(token) : null;
+};
+
 let seedPromise: Promise<void> | null = null;
 
 const toIso = (value: Date | string) => (value instanceof Date ? value.toISOString() : value);
@@ -306,6 +354,203 @@ const ensureSeedData = async () => {
 router.use(async (_req, _res, next): Promise<void> => {
   await ensureSeedData();
   next();
+});
+
+router.post("/admin/login", async (req, res): Promise<void> => {
+  const parsed = AdminLoginBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const email = parsed.data.email.toLowerCase();
+  const allowedPassword = process.env.ADMIN_DEMO_PASSWORD ?? "admin123";
+  if (parsed.data.password !== allowedPassword) {
+    res.status(401).json({ error: "Invalid admin credentials" });
+    return;
+  }
+
+  const token = signToken({
+    email,
+    role: "admin",
+    permissions: ["dashboard", "users", "kyc", "deposits", "withdrawals", "markets", "roles", "settings"],
+  });
+
+  res.json({
+    token,
+    admin: {
+      email,
+      name: "CryptoX Admin",
+      role: "admin",
+      permissions: ["dashboard", "users", "kyc", "deposits", "withdrawals", "markets", "roles", "settings"],
+    },
+  });
+});
+
+router.get("/admin/me", async (req, res): Promise<void> => {
+  const admin = readAdminAuth(req.headers.authorization);
+  if (!admin || admin.role !== "admin") {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  res.json({ email: admin.email, role: admin.role });
+});
+
+router.get("/admin/dashboard-stats", async (_req, res): Promise<void> => {
+  const [usersCount] = await db.select({ value: count() }).from(adminUsersTable);
+  const [inrDeposits] = await db.select({ value: sql<number>`coalesce(sum(${inrDepositsTable.amount}), 0)` }).from(inrDepositsTable);
+  const [cryptoDeposits] = await db.select({ value: sql<number>`coalesce(sum(${cryptoDepositsTable.amount}), 0)` }).from(cryptoDepositsTable);
+  const [inrWithdrawals] = await db.select({ value: sql<number>`coalesce(sum(${inrWithdrawalsTable.amount}), 0)` }).from(inrWithdrawalsTable);
+  const [cryptoWithdrawals] = await db.select({ value: sql<number>`coalesce(sum(${cryptoWithdrawalsTable.amount}), 0)` }).from(cryptoWithdrawalsTable);
+  const [spotVolume] = await db.select({ value: sql<number>`coalesce(sum(${tradesTable.price} * ${tradesTable.quantity}), 0)` }).from(tradesTable);
+  const [futuresVolume] = await db.select({ value: sql<number>`coalesce(sum(${futuresTradesTable.price} * ${futuresTradesTable.quantity}), 0)` }).from(futuresTradesTable);
+
+  res.json({
+    totalUsers: Number(usersCount?.value ?? 0),
+    totalDeposits: Number(inrDeposits?.value ?? 0) + Number(cryptoDeposits?.value ?? 0),
+    totalWithdrawals: Number(inrWithdrawals?.value ?? 0) + Number(cryptoWithdrawals?.value ?? 0),
+    tradingVolume: Number(spotVolume?.value ?? 0) + Number(futuresVolume?.value ?? 0),
+  });
+});
+
+router.post("/admin/user/block", async (req, res): Promise<void> => {
+  const parsed = IdBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [existing] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.id, parsed.data.id));
+  if (!existing) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  const [user] = await db.update(adminUsersTable).set({ status: existing.status === "Active" ? "Suspended" : "Active" }).where(eq(adminUsersTable.id, parsed.data.id)).returning();
+  await recordActivity(`${user.status === "Active" ? "Unblocked" : "Blocked"} user ${user.email}.`);
+  res.json(userResponse(user));
+});
+
+router.get("/admin/kyc", async (_req, res): Promise<void> => {
+  res.json(await db.select().from(kycRequestsTable).orderBy(desc(kycRequestsTable.createdAt)));
+});
+
+router.post("/admin/kyc/approve", async (req, res): Promise<void> => {
+  const parsed = ApprovalBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [kyc] = await db.update(kycRequestsTable).set({ status: parsed.data.status }).where(eq(kycRequestsTable.id, parsed.data.id)).returning();
+  if (!kyc) {
+    res.status(404).json({ error: "KYC request not found" });
+    return;
+  }
+  await db.update(adminUsersTable).set({ kyc: parsed.data.status === "Approved" ? "Verified" : "Rejected" }).where(eq(adminUsersTable.id, kyc.userId));
+  await recordActivity(`${parsed.data.status} KYC request #${kyc.id}.`);
+  res.json(kyc);
+});
+
+router.get("/admin/inr/deposits", async (_req, res): Promise<void> => {
+  res.json(await db.select().from(inrDepositsTable).orderBy(desc(inrDepositsTable.createdAt)));
+});
+
+router.post("/admin/inr/deposit/approve", async (req, res): Promise<void> => {
+  const parsed = ApprovalBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [deposit] = await db.update(inrDepositsTable).set({ status: parsed.data.status }).where(eq(inrDepositsTable.id, parsed.data.id)).returning();
+  if (!deposit) {
+    res.status(404).json({ error: "INR deposit not found" });
+    return;
+  }
+  await recordActivity(`${parsed.data.status} INR deposit #${deposit.id}.`);
+  res.json(deposit);
+});
+
+router.get("/admin/inr/withdrawals", async (_req, res): Promise<void> => {
+  res.json(await db.select().from(inrWithdrawalsTable).orderBy(desc(inrWithdrawalsTable.createdAt)));
+});
+
+router.post("/admin/inr/withdraw/approve", async (req, res): Promise<void> => {
+  const parsed = ApprovalBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [withdrawal] = await db.update(inrWithdrawalsTable).set({ status: parsed.data.status }).where(eq(inrWithdrawalsTable.id, parsed.data.id)).returning();
+  if (!withdrawal) {
+    res.status(404).json({ error: "INR withdrawal not found" });
+    return;
+  }
+  await recordActivity(`${parsed.data.status} INR withdrawal #${withdrawal.id}.`);
+  res.json(withdrawal);
+});
+
+router.get("/admin/crypto/withdrawals", async (_req, res): Promise<void> => {
+  res.json(await db.select().from(cryptoWithdrawalsTable).orderBy(desc(cryptoWithdrawalsTable.createdAt)));
+});
+
+router.post("/admin/crypto/withdraw/approve", async (req, res): Promise<void> => {
+  const parsed = ApprovalBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [withdrawal] = await db.update(cryptoWithdrawalsTable).set({ status: parsed.data.status }).where(eq(cryptoWithdrawalsTable.id, parsed.data.id)).returning();
+  if (!withdrawal) {
+    res.status(404).json({ error: "Crypto withdrawal not found" });
+    return;
+  }
+  await recordActivity(`${parsed.data.status} crypto withdrawal #${withdrawal.id}.`);
+  res.json(withdrawal);
+});
+
+router.get("/admin/transactions", async (_req, res): Promise<void> => {
+  res.json(await db.select().from(transactionsTable).orderBy(desc(transactionsTable.createdAt)));
+});
+
+router.get("/admin/markets", async (_req, res): Promise<void> => {
+  res.json(await db.select().from(marketPairsTable).orderBy(asc(marketPairsTable.symbol)));
+});
+
+router.post("/admin/market/toggle", async (req, res): Promise<void> => {
+  const parsed = MarketToggleBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [existing] = await db.select().from(marketPairsTable).where(eq(marketPairsTable.id, parsed.data.id));
+  if (!existing) {
+    res.status(404).json({ error: "Market not found" });
+    return;
+  }
+  const [market] = await db.update(marketPairsTable).set({ status: existing.status === "Active" ? "Paused" : "Active" }).where(eq(marketPairsTable.id, parsed.data.id)).returning();
+  await recordActivity(`${market.status === "Active" ? "Enabled" : "Disabled"} market ${market.symbol}.`);
+  res.json(market);
+});
+
+router.get("/admin/roles", async (_req, res): Promise<void> => {
+  const [existing] = await db.select({ value: count() }).from(rolesTable);
+  if ((existing?.value ?? 0) === 0) {
+    await db.insert(rolesTable).values([
+      { name: "admin", description: "Full exchange administration access" },
+      { name: "support", description: "Users and KYC support access" },
+      { name: "finance", description: "Deposits, withdrawals and ledger access" },
+    ]);
+  }
+  res.json(await db.select().from(rolesTable).orderBy(asc(rolesTable.name)));
+});
+
+router.post("/admin/roles", async (req, res): Promise<void> => {
+  const parsed = RoleBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [role] = await db.insert(rolesTable).values({ name: parsed.data.name, description: parsed.data.description ?? "" }).returning();
+  await recordActivity(`Created admin role ${role.name}.`);
+  res.status(201).json(role);
 });
 
 router.get("/admin/overview", async (_req, res): Promise<void> => {
