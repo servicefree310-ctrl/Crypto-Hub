@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   BadgeDollarSign,
@@ -39,14 +39,34 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type AdminSection = "coins" | "pairs" | "users" | "fees";
+type AdminSection = "coins" | "pairs" | "users" | "fees" | "database" | "networks" | "gateways" | "settings";
 type FeeField = keyof Omit<AdminFeeTier, "id" | "name">;
+type ExchangeData = {
+  currencies: Array<Record<string, any>>;
+  networks: Array<Record<string, any>>;
+  marketPairs: Array<Record<string, any>>;
+  futuresPairs: Array<Record<string, any>>;
+  positions: Array<Record<string, any>>;
+  deposits: Array<Record<string, any>>;
+  withdrawals: Array<Record<string, any>>;
+  kyc: Array<Record<string, any>>;
+  transactions: Array<Record<string, any>>;
+  settings: Array<Record<string, any>>;
+  methods: Array<Record<string, any>>;
+  gateways: Array<Record<string, any>>;
+  securityEvents: Array<Record<string, any>>;
+};
+type TableCount = { name: string; count: number };
 
 const sections: { id: AdminSection; label: string; icon: typeof Coins }[] = [
   { id: "coins", label: "Coins", icon: Coins },
   { id: "pairs", label: "Pairs", icon: BadgeDollarSign },
   { id: "users", label: "Users", icon: Users },
   { id: "fees", label: "Fees", icon: Settings },
+  { id: "database", label: "Full DB", icon: ShieldCheck },
+  { id: "networks", label: "Networks", icon: Coins },
+  { id: "gateways", label: "Gateways", icon: BadgeDollarSign },
+  { id: "settings", label: "Settings", icon: Settings },
 ];
 
 const adminQueryKeys = [
@@ -67,6 +87,24 @@ const statusClass = (status: string) => {
 const currency = (value: number) =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
+const apiPath = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
+
+async function adminRequest(path: string, options: RequestInit = {}) {
+  const response = await fetch(apiPath(path), {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Request failed: ${response.status}`);
+  }
+  if (response.status === 204) return null;
+  return response.json();
+}
+
 export default function Admin() {
   const queryClient = useQueryClient();
   const [section, setSection] = useState<AdminSection>("coins");
@@ -76,6 +114,8 @@ export default function Admin() {
   const [userForm, setUserForm] = useState({ name: "", email: "", role: "User" as AdminUser["role"] });
   const [feeDrafts, setFeeDrafts] = useState<Record<number, Omit<AdminFeeTier, "id" | "name">>>({});
   const [message, setMessage] = useState("");
+  const [exchangeData, setExchangeData] = useState<ExchangeData | null>(null);
+  const [tableCounts, setTableCounts] = useState<TableCount[]>([]);
 
   const overviewQuery = useGetAdminOverview();
   const activityQuery = useListAdminActivity();
@@ -91,6 +131,19 @@ export default function Admin() {
   const activity = activityQuery.data ?? [];
   const loading = overviewQuery.isLoading || coinsQuery.isLoading || pairsQuery.isLoading || usersQuery.isLoading || feesQuery.isLoading;
   const error = overviewQuery.error || activityQuery.error || coinsQuery.error || pairsQuery.error || usersQuery.error || feesQuery.error;
+
+  const refreshExchangeData = useCallback(async () => {
+    const [fullDb, counts] = await Promise.all([
+      adminRequest("api/admin/exchange/full-db"),
+      adminRequest("api/admin/exchange/table-counts"),
+    ]);
+    setExchangeData(fullDb);
+    setTableCounts(counts);
+  }, []);
+
+  useEffect(() => {
+    refreshExchangeData().catch((err) => setMessage(err instanceof Error ? err.message : "Failed to load exchange database."));
+  }, [refreshExchangeData]);
 
   useEffect(() => {
     if (!fees.length) return;
@@ -203,6 +256,54 @@ export default function Admin() {
   const saveFees = async () => {
     const changes = fees.filter((fee) => feeDrafts[fee.id]);
     await Promise.all(changes.map((fee) => updateFeeMutation.mutateAsync({ id: fee.id, data: feeDrafts[fee.id] })));
+  };
+
+  const patchCoin = async (id: number, data: Record<string, unknown>) => {
+    await adminRequest(`api/admin/coins/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    await invalidateAdmin();
+    setMessage("Coin updated in database.");
+  };
+
+  const patchUser = async (id: number, data: Record<string, unknown>) => {
+    await adminRequest(`api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    await invalidateAdmin();
+    setMessage("User updated in database.");
+  };
+
+  const patchNetwork = async (id: number, data: Record<string, unknown>) => {
+    await adminRequest(`api/admin/currency-networks/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    await refreshExchangeData();
+    setMessage("Network updated in database.");
+  };
+
+  const deleteNetwork = async (id: number) => {
+    await adminRequest(`api/admin/currency-networks/${id}`, { method: "DELETE" });
+    await refreshExchangeData();
+    setMessage("Network deleted from database.");
+  };
+
+  const patchGateway = async (id: number, data: Record<string, unknown>) => {
+    await adminRequest(`api/admin/payment-gateways/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    await refreshExchangeData();
+    setMessage("Gateway updated in database.");
+  };
+
+  const deleteGateway = async (id: number) => {
+    await adminRequest(`api/admin/payment-gateways/${id}`, { method: "DELETE" });
+    await refreshExchangeData();
+    setMessage("Gateway deleted from database.");
+  };
+
+  const patchPaymentMethod = async (id: number, data: Record<string, unknown>) => {
+    await adminRequest(`api/admin/payment-methods/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    await refreshExchangeData();
+    setMessage("Payment method updated in database.");
+  };
+
+  const patchSetting = async (id: number, data: Record<string, unknown>) => {
+    await adminRequest(`api/admin/system-settings/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    await refreshExchangeData();
+    setMessage("System setting updated in database.");
   };
 
   return (
@@ -322,9 +423,17 @@ export default function Admin() {
                           </div>
                         </Td>
                         <Td align="right">
+                          <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => patchCoin(coin.id, { status: coin.status === "Listed" ? "Paused" : "Listed" })}>
+                            {coin.status === "Listed" ? "Pause" : "List"}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => patchCoin(coin.id, { depositEnabled: !coin.depositEnabled, withdrawalEnabled: !coin.withdrawalEnabled })}>
+                            Wallet
+                          </Button>
                           <Button size="sm" variant="outline" onClick={() => deleteCoinMutation.mutate({ id: coin.id })} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-testid={`btn-delete-coin-${coin.symbol}`}>
                             <Trash2 size={14} />
                           </Button>
+                          </div>
                         </Td>
                       </tr>
                     ))}
@@ -426,9 +535,17 @@ export default function Admin() {
                         <Td><Pill value={user.status} /></Td>
                         <Td align="right" mono>{currency(user.balance)}</Td>
                         <Td align="right">
+                          <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => patchUser(user.id, { kyc: user.kyc === "Verified" ? "Pending" : "Verified" })}>
+                            KYC
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => patchUser(user.id, { status: user.status === "Active" ? "Suspended" : "Active" })}>
+                            {user.status === "Active" ? "Block" : "Unblock"}
+                          </Button>
                           <Button size="sm" variant="outline" onClick={() => deleteUserMutation.mutate({ id: user.id })} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-testid={`btn-delete-user-${user.id}`}>
                             <Trash2 size={14} />
                           </Button>
+                          </div>
                         </Td>
                       </tr>
                     ))}
@@ -464,6 +581,181 @@ export default function Admin() {
               </div>
             </DataPanel>
           )}
+
+          {section === "database" && (
+            <>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {tableCounts.map((item) => (
+                  <div key={item.name} className="bg-card border border-border rounded-xl p-4">
+                    <div className="text-xs text-muted-foreground">{item.name}</div>
+                    <div className="text-2xl font-bold font-mono mt-2">{item.count}</div>
+                  </div>
+                ))}
+              </div>
+              <DataPanel title="Global transactions ledger">
+                <SimpleTable rows={exchangeData?.transactions ?? []} columns={["id", "userId", "type", "currency", "amount", "status", "reference"]} />
+              </DataPanel>
+              <DataPanel title="Futures positions">
+                <SimpleTable rows={exchangeData?.positions ?? []} columns={["id", "userId", "pair", "leverage", "entryPrice", "markPrice", "pnl", "liquidationPrice", "status"]} />
+              </DataPanel>
+              <DataPanel title="KYC / deposits / withdrawals queue">
+                <div className="grid lg:grid-cols-3 gap-4 p-4">
+                  <MiniList title="KYC" rows={exchangeData?.kyc ?? []} fields={["userId", "documentType", "status"]} />
+                  <MiniList title="INR Deposits" rows={exchangeData?.deposits ?? []} fields={["userId", "amount", "method", "status"]} />
+                  <MiniList title="Crypto Withdrawals" rows={exchangeData?.withdrawals ?? []} fields={["userId", "currency", "network", "amount", "status"]} />
+                </div>
+              </DataPanel>
+            </>
+          )}
+
+          {section === "networks" && (
+            <>
+              <DataPanel title="Currency master list">
+                <SimpleTable rows={exchangeData?.currencies ?? []} columns={["id", "symbol", "name", "type", "precision", "priceUsd", "status", "depositEnabled", "withdrawalEnabled"]} />
+              </DataPanel>
+              <DataPanel title="Coin networks">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-secondary/40">
+                      <Th>Currency</Th>
+                      <Th>Network</Th>
+                      <Th align="right">Min Withdraw</Th>
+                      <Th align="right">Fee</Th>
+                      <Th>Status</Th>
+                      <Th align="right">Action</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(exchangeData?.networks ?? []).map((network) => (
+                      <tr key={network.id} className="border-b border-border/50 hover:bg-secondary/20">
+                        <Td>{network.currencySymbol}</Td>
+                        <Td>{network.network}</Td>
+                        <Td align="right" mono>{network.minWithdrawal}</Td>
+                        <Td align="right" mono>{network.withdrawalFee}</Td>
+                        <Td><Pill value={network.status} /></Td>
+                        <Td align="right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="outline" onClick={() => patchNetwork(network.id, { status: network.status === "Active" ? "Paused" : "Active" })}>
+                              {network.status === "Active" ? "Pause" : "Enable"}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => patchNetwork(network.id, { depositEnabled: !network.depositEnabled, withdrawalEnabled: !network.withdrawalEnabled })}>
+                              Toggle I/O
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => deleteNetwork(network.id)} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground">
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DataPanel>
+              <DataPanel title="Spot and futures markets">
+                <div className="grid lg:grid-cols-2 gap-4 p-4">
+                  <MiniList title="Spot pairs" rows={exchangeData?.marketPairs ?? []} fields={["symbol", "minOrder", "status"]} />
+                  <MiniList title="Futures pairs" rows={exchangeData?.futuresPairs ?? []} fields={["symbol", "contractType", "maxLeverage", "status"]} />
+                </div>
+              </DataPanel>
+            </>
+          )}
+
+          {section === "gateways" && (
+            <>
+              <DataPanel title="Payment gateway settings">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-secondary/40">
+                      <Th>Name</Th>
+                      <Th>Provider</Th>
+                      <Th>Mode</Th>
+                      <Th>Status</Th>
+                      <Th align="right">Action</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(exchangeData?.gateways ?? []).map((gateway) => (
+                      <tr key={gateway.id} className="border-b border-border/50 hover:bg-secondary/20">
+                        <Td>{gateway.name}</Td>
+                        <Td>{gateway.provider}</Td>
+                        <Td>{gateway.mode}</Td>
+                        <Td><Pill value={gateway.status} /></Td>
+                        <Td align="right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="outline" onClick={() => patchGateway(gateway.id, { status: gateway.status === "Active" ? "Disabled" : "Active" })}>
+                              {gateway.status === "Active" ? "Disable" : "Enable"}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => deleteGateway(gateway.id)} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground">
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DataPanel>
+              <DataPanel title="INR payment methods">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-secondary/40">
+                      <Th>Name</Th>
+                      <Th>Type</Th>
+                      <Th>Provider</Th>
+                      <Th>Status</Th>
+                      <Th align="right">Action</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(exchangeData?.methods ?? []).map((method) => (
+                      <tr key={method.id} className="border-b border-border/50 hover:bg-secondary/20">
+                        <Td>{method.name}</Td>
+                        <Td>{method.type}</Td>
+                        <Td>{method.provider}</Td>
+                        <Td><Pill value={method.status} /></Td>
+                        <Td align="right">
+                          <Button size="sm" variant="outline" onClick={() => patchPaymentMethod(method.id, { status: method.status === "Active" ? "Disabled" : "Active" })}>
+                            {method.status === "Active" ? "Disable" : "Enable"}
+                          </Button>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DataPanel>
+            </>
+          )}
+
+          {section === "settings" && (
+            <DataPanel title="System, security and user settings">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-secondary/40">
+                    <Th>Group</Th>
+                    <Th>Key</Th>
+                    <Th>Value</Th>
+                    <Th>Type</Th>
+                    <Th align="right">Action</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(exchangeData?.settings ?? []).map((setting) => (
+                    <tr key={setting.id} className="border-b border-border/50 hover:bg-secondary/20">
+                      <Td>{setting.group}</Td>
+                      <Td mono>{setting.key}</Td>
+                      <Td>{setting.value}</Td>
+                      <Td>{setting.type}</Td>
+                      <Td align="right">
+                        <Button size="sm" variant="outline" onClick={() => patchSetting(setting.id, { value: setting.value === "true" ? "false" : setting.value === "false" ? "true" : setting.value })}>
+                          Toggle
+                        </Button>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </DataPanel>
+          )}
         </main>
       </div>
     </div>
@@ -492,6 +784,55 @@ function Th({ children, align = "left" }: { children: React.ReactNode; align?: "
 
 function Td({ children, align = "left", mono = false }: { children: React.ReactNode; align?: "left" | "right"; mono?: boolean }) {
   return <td className={`px-4 py-3 text-sm ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""}`}>{children}</td>;
+}
+
+function SimpleTable({ rows, columns }: { rows: Array<Record<string, any>>; columns: string[] }) {
+  return (
+    <table className="w-full">
+      <thead>
+        <tr className="border-b border-border bg-secondary/40">
+          {columns.map((column) => <Th key={column}>{column}</Th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr key={row.id ?? index} className="border-b border-border/50 hover:bg-secondary/20">
+            {columns.map((column) => (
+              <Td key={column} mono={typeof row[column] === "number"}>
+                {String(row[column] ?? "")}
+              </Td>
+            ))}
+          </tr>
+        ))}
+        {!rows.length && (
+          <tr>
+            <Td>No records yet</Td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+function MiniList({ title, rows, fields }: { title: string; rows: Array<Record<string, any>>; fields: string[] }) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary/20 p-4">
+      <h3 className="font-semibold mb-3">{title}</h3>
+      <div className="space-y-3">
+        {rows.map((row, index) => (
+          <div key={row.id ?? index} className="rounded-md border border-border bg-card p-3 text-xs">
+            {fields.map((field) => (
+              <div key={field} className="flex justify-between gap-3">
+                <span className="text-muted-foreground">{field}</span>
+                <span className="font-mono text-right">{String(row[field] ?? "")}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+        {!rows.length && <div className="text-xs text-muted-foreground">No records yet.</div>}
+      </div>
+    </div>
+  );
 }
 
 function FeeInput({ label, value, onChange }: { label: string; value: number; onChange: (value: string) => void }) {

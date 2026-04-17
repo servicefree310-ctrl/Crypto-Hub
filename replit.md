@@ -31,13 +31,16 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - Admin OpenAPI contract lives in `lib/api-spec/openapi.yaml`.
 - Generated React Query hooks and schemas live in `lib/api-client-react/src/generated/` and `lib/api-zod/src/generated/`.
 - Admin Drizzle schema lives in `lib/db/src/schema/admin.ts`.
-- Admin tables:
+- Admin and exchange schema lives in one file: `lib/db/src/schema/admin.ts`.
+- Core admin tables:
   - `admin_coins`
   - `admin_pairs`
   - `admin_users`
   - `admin_fee_tiers`
   - `admin_activity`
+- Expanded Binance-like exchange tables include users/auth, roles/permissions, wallets, INR deposits/withdrawals, crypto deposits/withdrawals, spot markets/orders/trades, futures markets/accounts/orders/positions/liquidations/funding, margin, global ledger, notifications, security/audit logs, KYC, withdrawal approvals, referrals, promo codes, system settings, payment methods, and payment gateways.
 - The admin API seeds starter live records on first request if the admin coin table is empty.
+- The admin API also exposes `/api/admin/exchange/table-counts`, `/api/admin/exchange/full-db`, `/api/admin/currency-networks`, `/api/admin/system-settings`, `/api/admin/payment-methods`, and `/api/admin/payment-gateways` for advanced DB-connected admin controls.
 
 ## Artifacts
 
@@ -57,7 +60,8 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
   - `/login` — Login with email/password, social login
   - `/register` — Registration with password strength indicator
 - **Mock data**: `src/lib/mock-data.ts` still powers non-admin exchange screens.
-- **Admin data**: Uses generated React Query hooks from `@workspace/api-client-react` and persists to PostgreSQL via `/api/admin/*`.
+- **Admin data**: Uses generated React Query hooks plus direct admin API calls and persists to PostgreSQL via `/api/admin/*`.
+- **Advanced admin sections**: Full DB table counts, network management, payment gateways, payment methods, system settings, coin/user edit toggles, futures positions, KYC queues, deposits, withdrawals, and transaction ledger.
 - **Layout**: Sticky navbar, footer hidden on trading/admin pages.
 
 ### exchange-admin (React + Vite)
