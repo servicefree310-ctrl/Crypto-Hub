@@ -20,6 +20,10 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start admin panel"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -28,6 +32,18 @@ author = "agent"
 task = "shell.exec"
 args = "PORT=3000 BASE_PATH=/ pnpm --filter @workspace/crypto-exchange run dev"
 waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow]]
+name = "Start admin panel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=8081 BASE_PATH=/admin-panel API_PORT=8080 pnpm --filter @workspace/exchange-admin run dev"
+waitForPort = 8081
 
 [workflows.workflow.metadata]
 outputType = "webview"

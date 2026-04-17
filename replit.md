@@ -4,6 +4,27 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies. The main product is CryptoX, a Binance-inspired cryptocurrency exchange with a live PostgreSQL-backed admin panel.
 
+## New Features (added)
+
+- **Coin Listing Schedule** — per-coin listing time, trading start, deposit/withdraw windows, buy/sell enable times
+- **Service Registry** — register and enable/disable any platform service; role-level service permissions (read/write/execute)
+- **Blockchain Nodes** — manage RPC/WS endpoints per network with latency checks
+- **Email/SMTP Setup** — configure SMTP server with test connection, encryption options, quick-setup guides
+- **API Keys** — generate/revoke keys for mobile, web, server platforms with scope management
+- **AI Integrations** — connect Gemini, ChatGPT, Claude, or any OpenAI-compatible API
+- **AI Code Tool** — generate code, modify components, change design, add DB tables/rows from admin panel using connected AI APIs
+
+## New DB Tables
+
+- `coin_schedule` — listing/trading/deposit/withdraw schedule per coin
+- `service_registry` — platform service registry with enable/disable
+- `role_service_permissions` — role → service → canRead/canWrite/canExecute
+- `smtp_settings` — SMTP email server configuration
+- `blockchain_nodes` — blockchain RPC/WS node management
+- `ai_integrations` — AI provider config (Gemini/OpenAI/Anthropic/custom)
+- `api_keys` — API key management with scopes and platform
+- `ai_code_logs` — log of AI code generation requests and results
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces

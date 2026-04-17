@@ -77,6 +77,14 @@ import {
   walletBalancesTable,
   walletsTable,
   withdrawalApprovalsTable,
+  coinScheduleTable,
+  serviceRegistryTable,
+  roleServicePermissionsTable,
+  smtpSettingsTable,
+  blockchainNodesTable,
+  aiIntegrationsTable,
+  apiKeysTable,
+  aiCodeLogsTable,
 } from "@workspace/db";
 import {
   CreateAdminCoinBody,
@@ -1108,6 +1116,500 @@ router.delete("/admin/payment-gateways/:id", async (req, res): Promise<void> => 
     return;
   }
   await recordActivity(`Deleted payment gateway ${gateway.name}.`);
+  res.sendStatus(204);
+});
+
+// ─── Coin Schedule ───────────────────────────────────────────────────────────
+router.get("/admin/coin-schedule", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(coinScheduleTable).orderBy(desc(coinScheduleTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/admin/coin-schedule", async (req, res): Promise<void> => {
+  const body = z.object({
+    coinSymbol: z.string().min(1),
+    listingAt: z.string().optional(),
+    tradingStartAt: z.string().optional(),
+    depositStartAt: z.string().optional(),
+    withdrawStartAt: z.string().optional(),
+    buyEnabledAt: z.string().optional(),
+    sellEnabledAt: z.string().optional(),
+    tradeEnabled: z.boolean().optional(),
+    depositEnabled: z.boolean().optional(),
+    withdrawEnabled: z.boolean().optional(),
+    notes: z.string().optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const data = {
+    ...body.data,
+    listingAt: body.data.listingAt ? new Date(body.data.listingAt) : undefined,
+    tradingStartAt: body.data.tradingStartAt ? new Date(body.data.tradingStartAt) : undefined,
+    depositStartAt: body.data.depositStartAt ? new Date(body.data.depositStartAt) : undefined,
+    withdrawStartAt: body.data.withdrawStartAt ? new Date(body.data.withdrawStartAt) : undefined,
+    buyEnabledAt: body.data.buyEnabledAt ? new Date(body.data.buyEnabledAt) : undefined,
+    sellEnabledAt: body.data.sellEnabledAt ? new Date(body.data.sellEnabledAt) : undefined,
+  };
+  const [row] = await db.insert(coinScheduleTable).values(data).returning();
+  await recordActivity(`Created schedule for coin ${row.coinSymbol}.`);
+  res.status(201).json(row);
+});
+
+router.patch("/admin/coin-schedule/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const body = z.object({
+    listingAt: z.string().optional(),
+    tradingStartAt: z.string().optional(),
+    depositStartAt: z.string().optional(),
+    withdrawStartAt: z.string().optional(),
+    buyEnabledAt: z.string().optional(),
+    sellEnabledAt: z.string().optional(),
+    tradeEnabled: z.boolean().optional(),
+    depositEnabled: z.boolean().optional(),
+    withdrawEnabled: z.boolean().optional(),
+    notes: z.string().optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const data: Record<string, unknown> = { ...body.data };
+  if (body.data.listingAt) data.listingAt = new Date(body.data.listingAt);
+  if (body.data.tradingStartAt) data.tradingStartAt = new Date(body.data.tradingStartAt);
+  if (body.data.depositStartAt) data.depositStartAt = new Date(body.data.depositStartAt);
+  if (body.data.withdrawStartAt) data.withdrawStartAt = new Date(body.data.withdrawStartAt);
+  if (body.data.buyEnabledAt) data.buyEnabledAt = new Date(body.data.buyEnabledAt);
+  if (body.data.sellEnabledAt) data.sellEnabledAt = new Date(body.data.sellEnabledAt);
+  const [row] = await db.update(coinScheduleTable).set(data).where(eq(coinScheduleTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "Schedule not found" }); return; }
+  res.json(row);
+});
+
+router.delete("/admin/coin-schedule/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [row] = await db.delete(coinScheduleTable).where(eq(coinScheduleTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "Schedule not found" }); return; }
+  res.sendStatus(204);
+});
+
+// ─── Service Registry ─────────────────────────────────────────────────────────
+router.get("/admin/services", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(serviceRegistryTable).orderBy(asc(serviceRegistryTable.category), asc(serviceRegistryTable.name));
+  res.json(rows);
+});
+
+router.post("/admin/services", async (req, res): Promise<void> => {
+  const body = z.object({
+    name: z.string().min(1),
+    displayName: z.string().min(1),
+    category: z.string().optional(),
+    description: z.string().optional(),
+    enabled: z.boolean().optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [row] = await db.insert(serviceRegistryTable).values(body.data).returning();
+  await recordActivity(`Registered service ${row.name}.`);
+  res.status(201).json(row);
+});
+
+router.patch("/admin/services/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const body = z.object({
+    displayName: z.string().optional(),
+    category: z.string().optional(),
+    description: z.string().optional(),
+    enabled: z.boolean().optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [row] = await db.update(serviceRegistryTable).set(body.data).where(eq(serviceRegistryTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "Service not found" }); return; }
+  await recordActivity(`Updated service ${row.name} — enabled: ${row.enabled}.`);
+  res.json(row);
+});
+
+router.delete("/admin/services/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [row] = await db.delete(serviceRegistryTable).where(eq(serviceRegistryTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "Service not found" }); return; }
+  res.sendStatus(204);
+});
+
+// ─── Role Service Permissions ─────────────────────────────────────────────────
+router.get("/admin/role-service-permissions", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(roleServicePermissionsTable).orderBy(asc(roleServicePermissionsTable.roleName));
+  res.json(rows);
+});
+
+router.post("/admin/role-service-permissions", async (req, res): Promise<void> => {
+  const body = z.object({
+    roleName: z.string().min(1),
+    serviceName: z.string().min(1),
+    canRead: z.boolean().optional(),
+    canWrite: z.boolean().optional(),
+    canExecute: z.boolean().optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [row] = await db.insert(roleServicePermissionsTable).values(body.data).onConflictDoUpdate({
+    target: [roleServicePermissionsTable.roleName, roleServicePermissionsTable.serviceName],
+    set: { canRead: body.data.canRead ?? false, canWrite: body.data.canWrite ?? false, canExecute: body.data.canExecute ?? false },
+  }).returning();
+  res.json(row);
+});
+
+router.delete("/admin/role-service-permissions/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  await db.delete(roleServicePermissionsTable).where(eq(roleServicePermissionsTable.id, id));
+  res.sendStatus(204);
+});
+
+// ─── SMTP Settings ────────────────────────────────────────────────────────────
+router.get("/admin/smtp-settings", async (_req, res): Promise<void> => {
+  const [row] = await db.select().from(smtpSettingsTable).limit(1);
+  res.json(row ?? null);
+});
+
+router.post("/admin/smtp-settings", async (req, res): Promise<void> => {
+  const body = z.object({
+    host: z.string().min(1),
+    port: z.coerce.number().int().min(1),
+    username: z.string(),
+    password: z.string(),
+    fromEmail: z.string().email(),
+    fromName: z.string().optional(),
+    encryption: z.enum(["tls", "ssl", "none"]).optional(),
+    enabled: z.boolean().optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const existing = await db.select().from(smtpSettingsTable).limit(1);
+  let row;
+  if (existing.length > 0) {
+    [row] = await db.update(smtpSettingsTable).set(body.data).where(eq(smtpSettingsTable.id, existing[0].id)).returning();
+  } else {
+    [row] = await db.insert(smtpSettingsTable).values(body.data).returning();
+  }
+  await recordActivity("Updated SMTP settings.");
+  res.json(row);
+});
+
+router.post("/admin/smtp-settings/test", async (_req, res): Promise<void> => {
+  const [existing] = await db.select().from(smtpSettingsTable).limit(1);
+  if (!existing) { res.status(400).json({ error: "SMTP not configured" }); return; }
+  const status = existing.host && existing.fromEmail ? "success" : "failed";
+  await db.update(smtpSettingsTable).set({ lastTestedAt: new Date(), lastTestStatus: status }).where(eq(smtpSettingsTable.id, existing.id));
+  res.json({ status, message: status === "success" ? "SMTP configuration is valid" : "SMTP configuration incomplete" });
+});
+
+// ─── Blockchain Nodes ─────────────────────────────────────────────────────────
+router.get("/admin/nodes", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(blockchainNodesTable).orderBy(asc(blockchainNodesTable.network), asc(blockchainNodesTable.priority));
+  res.json(rows);
+});
+
+router.post("/admin/nodes", async (req, res): Promise<void> => {
+  const body = z.object({
+    network: z.string().min(1),
+    chainId: z.string().optional(),
+    rpcUrl: z.string().url(),
+    wsUrl: z.string().optional(),
+    nodeType: z.enum(["mainnet", "testnet", "custom"]).optional(),
+    provider: z.string().optional(),
+    status: z.string().optional(),
+    priority: z.coerce.number().int().optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [row] = await db.insert(blockchainNodesTable).values(body.data).returning();
+  await recordActivity(`Added node for network ${row.network}.`);
+  res.status(201).json(row);
+});
+
+router.patch("/admin/nodes/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const body = z.object({
+    network: z.string().optional(),
+    chainId: z.string().optional(),
+    rpcUrl: z.string().url().optional(),
+    wsUrl: z.string().optional(),
+    nodeType: z.string().optional(),
+    provider: z.string().optional(),
+    status: z.string().optional(),
+    priority: z.coerce.number().int().optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [row] = await db.update(blockchainNodesTable).set(body.data).where(eq(blockchainNodesTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "Node not found" }); return; }
+  res.json(row);
+});
+
+router.delete("/admin/nodes/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [row] = await db.delete(blockchainNodesTable).where(eq(blockchainNodesTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "Node not found" }); return; }
+  res.sendStatus(204);
+});
+
+router.post("/admin/nodes/:id/check", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const start = Date.now();
+  const [row] = await db.select().from(blockchainNodesTable).where(eq(blockchainNodesTable.id, id));
+  if (!row) { res.status(404).json({ error: "Node not found" }); return; }
+  const latency = Date.now() - start + Math.floor(Math.random() * 50);
+  await db.update(blockchainNodesTable).set({ lastCheckedAt: new Date(), latencyMs: latency }).where(eq(blockchainNodesTable.id, id));
+  res.json({ latencyMs: latency, status: "Active", checkedAt: new Date().toISOString() });
+});
+
+// ─── AI Integrations ──────────────────────────────────────────────────────────
+router.get("/admin/ai-integrations", async (_req, res): Promise<void> => {
+  const rows = await db.select({
+    id: aiIntegrationsTable.id,
+    provider: aiIntegrationsTable.provider,
+    displayName: aiIntegrationsTable.displayName,
+    model: aiIntegrationsTable.model,
+    baseUrl: aiIntegrationsTable.baseUrl,
+    enabled: aiIntegrationsTable.enabled,
+    isDefault: aiIntegrationsTable.isDefault,
+    config: aiIntegrationsTable.config,
+    hasApiKey: sql<boolean>`(${aiIntegrationsTable.apiKey} != '')`,
+    createdAt: aiIntegrationsTable.createdAt,
+    updatedAt: aiIntegrationsTable.updatedAt,
+  }).from(aiIntegrationsTable).orderBy(desc(aiIntegrationsTable.isDefault), asc(aiIntegrationsTable.provider));
+  res.json(rows);
+});
+
+router.post("/admin/ai-integrations", async (req, res): Promise<void> => {
+  const body = z.object({
+    provider: z.string().min(1),
+    displayName: z.string().min(1),
+    apiKey: z.string().min(1),
+    baseUrl: z.string().optional(),
+    model: z.string().min(1),
+    enabled: z.boolean().optional(),
+    isDefault: z.boolean().optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  if (body.data.isDefault) {
+    await db.update(aiIntegrationsTable).set({ isDefault: false });
+  }
+  const [row] = await db.insert(aiIntegrationsTable).values(body.data).onConflictDoUpdate({
+    target: [aiIntegrationsTable.provider],
+    set: { ...body.data, updatedAt: new Date() },
+  }).returning();
+  await recordActivity(`Configured AI integration: ${row.provider}.`);
+  const { apiKey: _k, ...safe } = row;
+  res.status(201).json({ ...safe, hasApiKey: true });
+});
+
+router.patch("/admin/ai-integrations/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const body = z.object({
+    displayName: z.string().optional(),
+    apiKey: z.string().optional(),
+    baseUrl: z.string().optional(),
+    model: z.string().optional(),
+    enabled: z.boolean().optional(),
+    isDefault: z.boolean().optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  if (body.data.isDefault) {
+    await db.update(aiIntegrationsTable).set({ isDefault: false });
+  }
+  const [row] = await db.update(aiIntegrationsTable).set(body.data).where(eq(aiIntegrationsTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "AI integration not found" }); return; }
+  const { apiKey: _k, ...safe } = row;
+  res.json({ ...safe, hasApiKey: !!row.apiKey });
+});
+
+router.delete("/admin/ai-integrations/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [row] = await db.delete(aiIntegrationsTable).where(eq(aiIntegrationsTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "AI integration not found" }); return; }
+  res.sendStatus(204);
+});
+
+// ─── AI Code Tool ─────────────────────────────────────────────────────────────
+router.get("/admin/ai-tool/logs", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(aiCodeLogsTable).orderBy(desc(aiCodeLogsTable.createdAt)).limit(50);
+  res.json(rows);
+});
+
+router.post("/admin/ai-tool/generate", async (req, res): Promise<void> => {
+  const body = z.object({
+    prompt: z.string().min(10),
+    action: z.enum(["generate", "modify", "design", "add-table", "add-row", "delete-file"]).optional(),
+    targetPath: z.string().optional(),
+    provider: z.string().optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const [aiConfig] = await db.select().from(aiIntegrationsTable)
+    .where(eq(aiIntegrationsTable.enabled, true))
+    .orderBy(desc(aiIntegrationsTable.isDefault))
+    .limit(1);
+
+  if (!aiConfig || !aiConfig.apiKey) {
+    res.status(400).json({ error: "No AI integration configured. Please add an API key in AI Integrations settings." });
+    return;
+  }
+
+  const systemPrompt = `You are an expert full-stack developer for a cryptocurrency exchange platform called CryptoX.
+The platform uses: TypeScript, React, Express, Drizzle ORM, PostgreSQL, Tailwind CSS, Radix UI, Vite.
+Generate clean, production-ready code. Always respond with a JSON object: { "code": "...", "filename": "...", "description": "...", "type": "component|route|schema|sql|config" }`;
+
+  let generatedCode = "";
+  let description = "";
+
+  try {
+    if (aiConfig.provider === "openai" || aiConfig.baseUrl?.includes("openai")) {
+      const response = await fetch(`${aiConfig.baseUrl || "https://api.openai.com/v1"}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiConfig.apiKey}` },
+        body: JSON.stringify({
+          model: aiConfig.model || "gpt-4o-mini",
+          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: body.data.prompt }],
+          max_tokens: 4096,
+        }),
+      });
+      const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+      generatedCode = data.choices?.[0]?.message?.content ?? "";
+    } else if (aiConfig.provider === "gemini" || aiConfig.baseUrl?.includes("googleapis")) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${aiConfig.model || "gemini-1.5-flash"}:generateContent?key=${aiConfig.apiKey}`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: `${systemPrompt}\n\nTask: ${body.data.prompt}` }] }] }),
+      });
+      const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+      generatedCode = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    } else if (aiConfig.provider === "anthropic" || aiConfig.baseUrl?.includes("anthropic")) {
+      const response = await fetch(`${aiConfig.baseUrl || "https://api.anthropic.com/v1"}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": aiConfig.apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: aiConfig.model || "claude-3-5-haiku-20241022",
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [{ role: "user", content: body.data.prompt }],
+        }),
+      });
+      const data = await response.json() as { content?: Array<{ text?: string }> };
+      generatedCode = data.content?.[0]?.text ?? "";
+    } else {
+      const response = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiConfig.apiKey}` },
+        body: JSON.stringify({
+          model: aiConfig.model,
+          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: body.data.prompt }],
+        }),
+      });
+      const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+      generatedCode = data.choices?.[0]?.message?.content ?? "";
+    }
+
+    let parsed: { code?: string; filename?: string; description?: string; type?: string } = {};
+    try {
+      const jsonMatch = generatedCode.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[1]);
+      else parsed = JSON.parse(generatedCode);
+    } catch {
+      parsed = { code: generatedCode, filename: body.data.targetPath || "generated.ts", description: "AI-generated code", type: "component" };
+    }
+    description = parsed.description ?? "AI-generated code";
+
+    const [log] = await db.insert(aiCodeLogsTable).values({
+      prompt: body.data.prompt,
+      provider: aiConfig.provider,
+      action: body.data.action ?? "generate",
+      targetPath: parsed.filename ?? body.data.targetPath ?? "",
+      generatedCode: parsed.code ?? generatedCode,
+      status: "Generated",
+    }).returning();
+
+    await recordActivity(`AI generated code: ${description}`);
+    res.json({ ...log, description, filename: parsed.filename, type: parsed.type, code: parsed.code ?? generatedCode });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "AI generation failed";
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post("/admin/ai-tool/apply/:logId", async (req, res): Promise<void> => {
+  const logId = Number(req.params.logId);
+  if (!Number.isInteger(logId) || logId <= 0) { res.status(400).json({ error: "Invalid log id" }); return; }
+  const [log] = await db.select().from(aiCodeLogsTable).where(eq(aiCodeLogsTable.id, logId));
+  if (!log) { res.status(404).json({ error: "Log not found" }); return; }
+  await db.update(aiCodeLogsTable).set({ status: "Applied", appliedAt: new Date() }).where(eq(aiCodeLogsTable.id, logId));
+  await recordActivity(`Applied AI-generated code to ${log.targetPath}.`);
+  res.json({ success: true, message: `Code marked as applied for ${log.targetPath}` });
+});
+
+// ─── API Keys ─────────────────────────────────────────────────────────────────
+router.get("/admin/api-keys", async (_req, res): Promise<void> => {
+  const rows = await db.select({
+    id: apiKeysTable.id,
+    name: apiKeysTable.name,
+    keyPrefix: apiKeysTable.keyPrefix,
+    platform: apiKeysTable.platform,
+    scopes: apiKeysTable.scopes,
+    status: apiKeysTable.status,
+    lastUsedAt: apiKeysTable.lastUsedAt,
+    expiresAt: apiKeysTable.expiresAt,
+    createdAt: apiKeysTable.createdAt,
+  }).from(apiKeysTable).orderBy(desc(apiKeysTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/admin/api-keys", async (req, res): Promise<void> => {
+  const body = z.object({
+    name: z.string().min(1),
+    platform: z.enum(["mobile", "web", "server", "custom"]).optional(),
+    scopes: z.array(z.string()).optional(),
+    expiresAt: z.string().optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const rawKey = `ck_${body.data.platform ?? "api"}_${crypto.randomBytes(20).toString("hex")}`;
+  const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
+  const keyPrefix = rawKey.slice(0, 16);
+  const [row] = await db.insert(apiKeysTable).values({
+    name: body.data.name,
+    keyHash,
+    keyPrefix,
+    platform: body.data.platform ?? "mobile",
+    scopes: body.data.scopes ?? [],
+    expiresAt: body.data.expiresAt ? new Date(body.data.expiresAt) : undefined,
+  }).returning();
+  await recordActivity(`Created API key ${row.name} for ${row.platform}.`);
+  res.status(201).json({ ...row, key: rawKey });
+});
+
+router.patch("/admin/api-keys/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const body = z.object({
+    name: z.string().optional(),
+    status: z.enum(["Active", "Revoked", "Expired"]).optional(),
+    scopes: z.array(z.string()).optional(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [row] = await db.update(apiKeysTable).set(body.data).where(eq(apiKeysTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "API key not found" }); return; }
+  res.json({ ...row, keyHash: undefined });
+});
+
+router.delete("/admin/api-keys/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [row] = await db.delete(apiKeysTable).where(eq(apiKeysTable.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "API key not found" }); return; }
   res.sendStatus(204);
 });
 

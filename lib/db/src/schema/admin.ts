@@ -724,6 +724,115 @@ export const userSettingsTable = pgTable("user_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+export const coinScheduleTable = pgTable("coin_schedule", {
+  id: serial("id").primaryKey(),
+  coinSymbol: text("coin_symbol").notNull(),
+  listingAt: timestamp("listing_at", { withTimezone: true }),
+  tradingStartAt: timestamp("trading_start_at", { withTimezone: true }),
+  depositStartAt: timestamp("deposit_start_at", { withTimezone: true }),
+  withdrawStartAt: timestamp("withdraw_start_at", { withTimezone: true }),
+  buyEnabledAt: timestamp("buy_enabled_at", { withTimezone: true }),
+  sellEnabledAt: timestamp("sell_enabled_at", { withTimezone: true }),
+  tradeEnabled: boolean("trade_enabled").notNull().default(false),
+  depositEnabled: boolean("deposit_enabled").notNull().default(false),
+  withdrawEnabled: boolean("withdraw_enabled").notNull().default(false),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [uniqueIndex("coin_schedule_symbol_unique").on(table.coinSymbol)]);
+
+export const serviceRegistryTable = pgTable("service_registry", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  displayName: text("display_name").notNull(),
+  category: text("category").notNull().default("core"),
+  description: text("description").notNull().default(""),
+  enabled: boolean("enabled").notNull().default(true),
+  config: jsonb("config").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [uniqueIndex("service_registry_name_unique").on(table.name)]);
+
+export const roleServicePermissionsTable = pgTable("role_service_permissions", {
+  id: serial("id").primaryKey(),
+  roleName: text("role_name").notNull(),
+  serviceName: text("service_name").notNull(),
+  canRead: boolean("can_read").notNull().default(false),
+  canWrite: boolean("can_write").notNull().default(false),
+  canExecute: boolean("can_execute").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("role_service_perm_unique").on(table.roleName, table.serviceName)]);
+
+export const smtpSettingsTable = pgTable("smtp_settings", {
+  id: serial("id").primaryKey(),
+  host: text("host").notNull().default(""),
+  port: integer("port").notNull().default(587),
+  username: text("username").notNull().default(""),
+  password: text("password").notNull().default(""),
+  fromEmail: text("from_email").notNull().default(""),
+  fromName: text("from_name").notNull().default("CryptoX"),
+  encryption: text("encryption").notNull().default("tls"),
+  enabled: boolean("enabled").notNull().default(false),
+  lastTestedAt: timestamp("last_tested_at", { withTimezone: true }),
+  lastTestStatus: text("last_test_status").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const blockchainNodesTable = pgTable("blockchain_nodes", {
+  id: serial("id").primaryKey(),
+  network: text("network").notNull(),
+  chainId: text("chain_id").notNull().default(""),
+  rpcUrl: text("rpc_url").notNull(),
+  wsUrl: text("ws_url").notNull().default(""),
+  nodeType: text("node_type").notNull().default("mainnet"),
+  provider: text("provider").notNull().default("custom"),
+  status: text("status").notNull().default("Active"),
+  priority: integer("priority").notNull().default(1),
+  latencyMs: integer("latency_ms").notNull().default(0),
+  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const aiIntegrationsTable = pgTable("ai_integrations", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull(),
+  displayName: text("display_name").notNull(),
+  apiKey: text("api_key").notNull().default(""),
+  baseUrl: text("base_url").notNull().default(""),
+  model: text("model").notNull().default(""),
+  enabled: boolean("enabled").notNull().default(false),
+  isDefault: boolean("is_default").notNull().default(false),
+  config: jsonb("config").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [uniqueIndex("ai_integrations_provider_unique").on(table.provider)]);
+
+export const apiKeysTable = pgTable("api_keys", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull(),
+  keyPrefix: text("key_prefix").notNull(),
+  platform: text("platform").notNull().default("mobile"),
+  scopes: jsonb("scopes").notNull().default([]),
+  status: text("status").notNull().default("Active"),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const aiCodeLogsTable = pgTable("ai_code_logs", {
+  id: serial("id").primaryKey(),
+  prompt: text("prompt").notNull(),
+  provider: text("provider").notNull().default("gemini"),
+  action: text("action").notNull().default("generate"),
+  targetPath: text("target_path").notNull().default(""),
+  generatedCode: text("generated_code").notNull().default(""),
+  status: text("status").notNull().default("Pending"),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertAdminCoinSchema = createInsertSchema(adminCoinsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAdminPairSchema = createInsertSchema(adminPairsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAdminUserSchema = createInsertSchema(adminUsersTable).omit({ id: true, createdAt: true, updatedAt: true });

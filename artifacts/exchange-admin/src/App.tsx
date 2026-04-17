@@ -10,6 +10,13 @@ import DashboardPage from "@/pages/admin/DashboardPage";
 import UsersPage from "@/pages/admin/UsersPage";
 import RecordsPage from "@/pages/admin/RecordsPage";
 import RolesPage from "@/pages/admin/RolesPage";
+import CoinSchedulePage from "@/pages/admin/CoinSchedulePage";
+import ServicesPage from "@/pages/admin/ServicesPage";
+import NodesPage from "@/pages/admin/NodesPage";
+import EmailSetupPage from "@/pages/admin/EmailSetupPage";
+import ApiKeysPage from "@/pages/admin/ApiKeysPage";
+import AiIntegrationsPage from "@/pages/admin/AiIntegrationsPage";
+import AiToolPage from "@/pages/admin/AiToolPage";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +41,13 @@ function App() {
                 <Route path="crypto-withdrawals" element={<RecordsPage title="Crypto Withdraw Management" endpoint="/admin/crypto/withdrawals" actionEndpoint="/admin/crypto/withdraw/approve" columns={["id", "userId", "currency", "network", "address", "amount", "fee", "status"]} permission="withdrawals" />} />
                 <Route path="transactions" element={<RecordsPage title="Transactions & Ledger" endpoint="/admin/transactions" columns={["id", "userId", "type", "currency", "amount", "status", "reference"]} permission="dashboard" />} />
                 <Route path="markets" element={<RecordsPage title="Market Management" endpoint="/admin/markets" actionEndpoint="/admin/market/toggle" actionLabel="Toggle" columns={["id", "symbol", "base", "quote", "minOrder", "tickSize", "stepSize", "status"]} permission="markets" />} />
+                <Route path="coin-schedule" element={<CoinSchedulePage />} />
+                <Route path="services" element={<ServicesPage />} />
+                <Route path="nodes" element={<NodesPage />} />
+                <Route path="email-setup" element={<EmailSetupPage />} />
+                <Route path="api-keys" element={<ApiKeysPage />} />
+                <Route path="ai-integrations" element={<AiIntegrationsPage />} />
+                <Route path="ai-tool" element={<AiToolPage />} />
                 <Route path="roles" element={<RolesPage />} />
                 <Route path="settings" element={<RecordsPage title="System Settings" endpoint="/admin/system-settings" columns={["id", "group", "key", "value", "type"]} permission="settings" />} />
               </Route>
