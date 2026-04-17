@@ -21,7 +21,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes in development
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
-- `pnpm --filter @workspace/crypto-exchange run dev` — run main exchange web app
+- `pnpm --filter @workspace/crypto-exchange run dev` — run main exchange web app and local API server with Vite proxying `/api`
 - `pnpm --filter @workspace/exchange-admin run dev` — run standalone admin web app
 
 ## API and Database
