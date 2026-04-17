@@ -38,7 +38,16 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - `/` — Home page with price ticker, hero, stats, trending coin table
   - `/trade` — Full trading interface with order book, chart, buy/sell panel, open orders
   - `/wallet` — Portfolio dashboard with allocation chart, asset list, transaction history
+  - `/admin` — Mock admin panel for coin listings, trading pair deletion/creation, user management, and fee setup
   - `/login` — Login with email/password, social login
   - `/register` — Registration with password strength indicator
-- **Mock data**: `src/lib/mock-data.ts` (coins, candles, order book)
+- **Mock data**: `src/lib/mock-data.ts` (coins, candles, order book, admin coins/pairs/users/fees)
+- **Admin data**: Browser-local mock state only; no live database is connected or required for admin actions
 - **Layout**: Sticky navbar, footer (hidden on trading page)
+
+### exchange-admin (React + Vite)
+- **Path**: `artifacts/exchange-admin/`
+- **Preview path**: `/` (root)
+- **Description**: Registered preview app containing the CryptoX exchange UI and mock admin panel
+- **Admin features**: Coin list/create/delete, trading pair create/delete, user management, and fee setup
+- **Data source**: Mock frontend state only; no live database required
